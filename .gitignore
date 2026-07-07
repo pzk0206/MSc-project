@@ -1,0 +1,27 @@
+# 本地工具和 Codex 会话文件
+.codex/
+.agents/
+.git_real/
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# 数据集、实验输出和大文件
+data/
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+
+# 常见系统/编辑器文件
+.DS_Store
+Thumbs.db
+.vscode/
