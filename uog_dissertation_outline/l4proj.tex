@@ -1,0 +1,178 @@
+% University of Glasgow School of Computing Science project template
+% Dissertation outline for MSc project planning.
+\documentclass{l4proj}
+
+\usepackage{pdfpages}
+
+\begin{document}
+
+%==============================================================================
+%% METADATA
+\title{Evaluating Open-Vocabulary Vision-Language Models for 2D Robotic Grasp Detection}
+\author{Pang Zhenkun}
+\date{MSc Robotics \& Artificial Intelligence\\Supervisor: Dr Jan Paul Siebert\\2026}
+
+\maketitle
+
+%==============================================================================
+%% ABSTRACT
+\begin{abstract}
+    \todo{300--400 words. Summarise: (1) research background and problem, (2) methodology, including Cornell dataset, VLM grounding, and geometric grasp estimation, (3) key findings, and (4) implications or outcomes. Write this after the experiments are complete.}
+\end{abstract}
+
+%==============================================================================
+%% ACKNOWLEDGEMENTS
+\chapter*{Acknowledgements}
+\todo{Add acknowledgements before final submission.}
+
+%==============================================================================
+%% EDUCATION REUSE CONSENT FORM
+% Uncomment and complete these lines only if you consent to educational reuse.
+%\def\consentname {Pang Zhenkun}
+%\def\consentdate {Date}
+\educationalconsent
+
+%==============================================================================
+\tableofcontents
+
+%==============================================================================
+\chapter{Introduction}
+\pagenumbering{arabic}
+
+\section{Background and Motivation}
+\todo{About 3--5 paragraphs. Introduce robotic grasp detection, visual perception, and VLM/open-vocabulary grounding. Explain the current problem and why it remains unresolved or worth studying. Then state the theoretical and practical motivation for the project.}
+
+\section{Research Questions}
+\todo{State the main research question and supporting sub-questions. Explain why these questions matter for robotic perception and grasp detection.}
+
+\section{Research Aim and Objectives}
+\todo{State the overall aim of the project, then list concrete objectives such as dataset preparation, baseline implementation, VLM-assisted pipeline design, evaluation, and failure case analysis.}
+
+\section{Scope of the Project}
+\todo{Clarify boundaries: this project focuses on offline 2D grasp perception on Cornell, not physical robot control or full manipulation. State optional parts such as few-shot adaptation as extensions rather than core requirements.}
+
+\section{Dissertation Structure}
+\todo{Briefly describe the remaining chapters.}
+
+%==============================================================================
+\chapter{Literature Review}
+
+\section{Robotic Grasp Detection}
+\todo{Review prior research on robotic grasp detection. Explain how grasp detection is commonly formulated and why visual perception is central to this problem.}
+
+\section{2D Grasp Rectangle Detection and Cornell Benchmarking}
+\todo{Review the 2D grasp rectangle formulation and Cornell-style benchmarking. Include classic works such as Lenz et al. and Redmon and Angelova.}
+
+\section{Classical Computer Vision and Deep Learning Approaches}
+\todo{Summarise traditional CV methods and supervised deep learning methods. Critically compare their strengths and weaknesses, especially data dependence, generalisation, and interpretability.}
+
+\section{Vision-Language Models and Open-Vocabulary Grounding}
+\todo{Review VLMs, zero-shot/open-vocabulary perception, and grounding models such as Grounding DINO, OWL-ViT, or Florence-2. Focus on how these models may support object localisation for robotic perception.}
+
+\section{Few-Shot and Lightweight Adaptation}
+\todo{Briefly review optional adaptation methods such as LoRA or QLoRA. Explain why this is treated as an extension rather than the main project goal.}
+
+\section{Literature Gap}
+\todo{Critically identify limitations in previous work and explain the gap addressed by this dissertation: whether open-vocabulary grounding outputs can be converted into useful 2D robotic grasp rectangles through geometric post-processing.}
+
+%==============================================================================
+\chapter{Methodology}
+
+\section{Research Design}
+\todo{Describe the overall experimental design. This is a technical dataset-based study, not a questionnaire or human-participant study. Explain the logic of comparing a CV baseline with a VLM-assisted pipeline.}
+
+\section{Dataset Selection and Preparation}
+\todo{Describe how the Cornell Grasping Dataset is obtained, organised, parsed, and prepared. Explain RGB/RGB-D inputs, annotation files, train/test split, and ground-truth visualisation.}
+
+\section{Task Formulation}
+\todo{Define the input and output of the task. Include the 2D grasp rectangle representation, such as centre, width, height, and angle.}
+
+\section{Traditional Computer Vision Baseline}
+\todo{Describe the baseline method and why it is needed as a comparison point. Include image processing, contour extraction, PCA, rotated bounding boxes, or other geometry methods.}
+
+\section{VLM-Assisted Grounding Pipeline}
+\todo{Describe the VLM grounding stage, model choice, text prompts, output boxes or regions, and how these outputs enter the grasp estimation pipeline.}
+
+\section{Geometric Grasp Rectangle Estimation}
+\todo{Explain how localised regions are converted into grasp rectangles. State the design principles and assumptions behind this conversion.}
+
+\section{Evaluation Metrics and Experimental Protocol}
+\todo{Define localisation IoU, grasp rectangle IoU, angle error, Cornell-style success criteria, compared methods, prompt settings, and ablation studies.}
+
+\section{Limitations of the Methodology}
+\todo{Discuss methodological limitations, such as dataset size, prompt sensitivity, model deployment constraints, no real robot validation, and optional adaptation risk.}
+
+%==============================================================================
+\chapter{Results}
+
+\section{Dataset and Implementation Verification}
+\todo{Show that dataset parsing, annotation conversion, and ground-truth visualisation work correctly. Summarise the software/hardware environment if useful.}
+
+\section{Quantitative Results}
+\todo{Present numerical results for the baseline and VLM-assisted method, such as IoU, angle error, and success rate.}
+
+\section{Qualitative Results}
+\todo{Present visual examples of predicted and ground-truth grasp rectangles, including successful and unsuccessful examples.}
+
+\section{Comparative Analysis}
+\todo{Compare baseline and VLM-assisted methods. Highlight where the VLM-assisted pipeline improves, matches, or underperforms the baseline.}
+
+\section{Ablation and Optional Adaptation Results}
+\todo{Report ablation results and optional few-shot or lightweight adaptation results if conducted. Delete this section if not used.}
+
+%==============================================================================
+\chapter{General Discussion}
+
+\section{Summary and Interpretation of Findings}
+\todo{Interpret the main findings rather than repeating the results. Explain what the results suggest about VLMs for robotic grasp perception.}
+
+\section{Relationship to Previous Literature}
+\todo{Compare your findings with the literature reviewed earlier. State where the results are in line with previous work and where they contradict or extend it.}
+
+\section{Failure Case Analysis}
+\todo{Discuss localisation failures, angle errors, poor region extraction, difficult object categories, and possible reasons for these failures.}
+
+\section{Practical and Theoretical Implications}
+\todo{Discuss the practical implications for robotic perception and the theoretical implications for using open-vocabulary models in grasp detection.}
+
+\section{Limitations}
+\todo{Discuss limitations such as Cornell-only evaluation, prompt sensitivity, no physical robot testing, limited compute, and the separation between object localisation and grasp estimation.}
+
+%==============================================================================
+\chapter{Conclusion}
+
+\section{Summary of the Dissertation}
+\todo{Summarise the full dissertation: background, literature gap, methodology, experiments, results, and discussion.}
+
+\section{Answers to the Research Questions}
+\todo{Answer each research question clearly using evidence from the results and discussion.}
+
+\section{Contributions and Practical Relevance}
+\todo{State the final contributions and explain the real-world or practical relevance of the work.}
+
+\section{Limitations and Recommendations}
+\todo{Briefly restate the main limitations and provide recommendations for future work, such as real robot validation, stronger segmentation, larger datasets, and improved adaptation.}
+
+%==============================================================================
+\begin{appendices}
+
+\chapter{Additional Material}
+
+\section{Additional Figures}
+\todo{Add extra visual examples.}
+
+\section{Additional Tables}
+\todo{Add extended quantitative results.}
+
+\section{Configuration Details}
+\todo{Add prompts, model versions, hyperparameters, and hardware details.}
+
+\end{appendices}
+
+%==============================================================================
+% The bibliography style is agsm (Harvard), as required by the template.
+\bibliographystyle{agsm}
+\renewcommand{\thechapter}{0}
+\bibliography{l4proj}
+
+\end{document}

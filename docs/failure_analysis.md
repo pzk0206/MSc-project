@@ -1,0 +1,143 @@
+# VLM-guided Geometric Pipeline 失败案例分析
+
+日期：2026-07-16
+
+## 1. 总体统计
+
+| 指标 | 数值 |
+|---|---|
+| 总样本数 | 885 |
+| 成功样本 | 649 |
+| 失败样本 | 236 |
+| 成功率 | 73.3% |
+| VLM 检测率 | 100% (885/885) |
+
+## 2. 失败模式分类
+
+236 个失败样本可以分为三类：
+
+| 失败模式 | 数量 | 占比 | 含义 |
+|---|---|---|---|
+| 仅 IoU 失败 (角度 ≤ 30°) | 126 | 53.4% | 抓取方向正确，但位置/尺寸不够吻合 |
+| 仅角度失败 (IoU ≥ 0.25) | 45 | 19.1% | 找到了正确位置，但抓取方向估计错误 |
+| 两者都失败 | 65 | 27.5% | 位置和方向都不对 |
+
+### 关键发现
+
+- **126 个样本 (53%) 角度已经正确，纯粹是几何后端无法生成合适的位置/尺寸**
+- 这说明：如果能让 CNN 后端在这些样本上学到更准确的 center/width/height，仅这一类就能让成功率从 73.3% 提升到 87.6%
+- 45 个样本角度错误但位置对，可能来自物体长轴/短轴方向的启发式规则在某些形状上失效
+
+## 3. IoU 失败严重程度分布
+
+| 严重程度 | 数量 | 说明 |
+|---|---|---|
+| severe (<0.05) | 19 |  |
+| major (0.05-0.10) | 22 |  |
+| moderate (0.10-0.15) | 47 |  |
+| minor (0.15-0.20) | 40 |  |
+| borderline (0.20-0.25) | 63 |  |
+
+- 63 个样本 IoU 在 0.20-0.25 之间，离 Cornell 阈值仅一步之遥，几何后端稍作调整即可成功
+- 19 个样本 IoU < 0.05，属于严重失败，可能是 VLM box 定位虽然检测到了物体但覆盖了错误的区域，或轮廓提取完全失败
+
+## 4. 角度失败严重程度分布
+
+| 严重程度 | 数量 | 说明 |
+|---|---|---|
+| borderline (30°-45°) | 29 |  |
+| major (45°-60°) | 17 |  |
+| severe (>60°) | 64 |  |
+
+- 29 个样本角度误差在 30°-45° 之间，属于边界失败
+- 64 个样本角度误差 > 60°，说明启发式方向规则（长轴垂直方向）在这些物体上完全失效
+
+## 5. 与 Traditional CV Baseline 交叉对比
+
+| 对比类型 | 数量 | 分析 |
+|---|---|---|
+| VLM 失败，Baseline 成功 | 9 | **退化案例**：VLM 定位反而降低了抓取检测。需要重点分析 |
+| VLM 失败，Baseline 也失败 | 227 | **难例**：两种方法都无法处理，可能是物体本身难以抓取或标注歧义 |
+
+### VLM 退化案例详情（VLM 失败但 Baseline 成功）
+
+| 样本 | VLM IoU | VLM 角度 | BL IoU | BL 角度 | 可能原因 |
+|---|---|---|---|---|---|
+| 01/pcd0111 | 0.201 | 0.4° | 0.316 | 21.7° | VLM box 可能裁剪过度，丢失了物体轮廓信息 |
+| 03/pcd0386 | 0.287 | 30.3° | 0.318 | 23.5° | VLM box 可能裁剪过度，丢失了物体轮廓信息 |
+| 03/pcd0392 | 0.183 | 86.0° | 0.302 | 3.7° | VLM box 可能裁剪过度，丢失了物体轮廓信息 |
+| 04/pcd0494 | 0.000 | 2.1° | 0.702 | 5.3° | VLM box 可能裁剪过度，丢失了物体轮廓信息 |
+| 06/pcd0611 | 0.030 | 66.8° | 0.690 | 0.3° | VLM box 可能裁剪过度，丢失了物体轮廓信息 |
+| 08/pcd0837 | 0.494 | 37.9° | 0.381 | 13.1° | VLM box 可能裁剪过度，丢失了物体轮廓信息 |
+| 08/pcd0851 | 0.019 | 36.1° | 0.663 | 16.5° | VLM box 可能裁剪过度，丢失了物体轮廓信息 |
+| 08/pcd0853 | 0.052 | 64.6° | 0.576 | 3.7° | VLM box 可能裁剪过度，丢失了物体轮廓信息 |
+| 10/pcd1000 | 0.000 | 25.9° | 0.429 | 18.9° | VLM box 可能裁剪过度，丢失了物体轮廓信息 |
+
+## 6. 按 Cornell 子目录的失败分布
+
+| 子目录 | 失败数 |
+|---|---|
+| 01 | 44 |
+| 02 | 14 |
+| 03 | 32 |
+| 04 | 36 |
+| 05 | 31 |
+| 06 | 17 |
+| 07 | 19 |
+| 08 | 22 |
+| 09 | 5 |
+| 10 | 16 |
+
+## 7. 失败原因诊断
+
+基于以上数据，VLM-guided geometric pipeline 的失败主要有以下根本原因：
+
+### 7.1 几何后端的固有局限（约占失败的 53%）
+
+- 126 个样本角度正确但 IoU 不足
+- 这说明 OpenCV 基于颜色/亮度的 mask 分割 + minAreaRect 的方法，即使知道了物体位置，生成的抓取矩形的中心、宽度、高度仍然不够准确
+- 原因是：轮廓形状不完全等于最佳抓取区域；物体表面的纹理、阴影会改变轮廓边界
+
+### 7.2 抓取方向启发式规则的失效（约占失败的 19%）
+
+- 45 个样本 IoU 达标但方向错误
+- 当前规则：抓取方向 = 物体长轴方向 + 90°（即横跨物体窄侧）
+- 这个规则在非规则形状、多分支物体、或抓取标注不沿物体主轴时失效
+
+### 7.3 复合失败（约占失败的 28%）
+
+- 65 个样本两者都失败
+- 这些是几何后端最难处理的样本：位置、大小、方向同时出错
+
+### 7.4 VLM 定位退化（9 个样本）
+
+- 这 9 个样本 VLM 定位后的几何抓取反而不如整图 CV baseline
+- 可能原因：VLM box 裁剪过紧，物体轮廓被截断；或 VLM box 包含多个物体，轮廓选择错误
+
+## 8. 对 CNN Backend 的启示
+
+1. **优先级最高**：解决 126 个 '仅 IoU 失败' 样本——CNN 应该能直接学习从 VLM crop 回归更准确的 center/width/height
+2. **角度学习**：45 个角度失败样本说明 sin(2θ)/cos(2θ) 的角度回归比几何规则更灵活
+3. **难例处理**：65 个双失败样本是检验 CNN backend 上限的关键测试集
+4. **VLM box 扩展**：9 个退化案例提示 expand_ratio 可能需要调大，或 CNN 需要接受比 VLM box 更大的输入区域
+
+## 9. 可写入论文的英文草稿
+
+```text
+Failure analysis of the VLM-guided geometric pipeline on the Cornell dataset
+revealed three distinct failure modes. Of the 236 failed samples,
+126 (53%) failed solely due to
+insufficient IoU despite correct grasp orientation, indicating that the
+hand-crafted geometric backend could not produce accurate grasp centre
+and dimensions even when the grasp direction was correct. A further
+45 (19%) failed solely due to
+angular error exceeding 30 degrees, suggesting that the heuristic of
+using the perpendicular to the object's major axis is unreliable for
+irregularly shaped objects. The remaining
+65 (28%) failed on both criteria.
+Only 9 samples that failed in the VLM-guided pipeline succeeded in the
+traditional CV baseline, confirming that VLM-based localisation rarely
+degrades performance. These findings motivate a learning-based grasp
+backend that can predict grasp parameters directly from the VLM crop,
+bypassing the limitations of hand-crafted geometric rules.
+```

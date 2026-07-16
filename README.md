@@ -12,29 +12,50 @@ VLM-guided 2D Robotic Grasp Rectangle Detection
 
 ## 当前进展
 
-当前已经完成两条可复现实验线：
+当前已经完成三条可复现实验线：
 
-1. Traditional CV baseline
+1. **Traditional CV baseline**
    - RGB 图像
    - OpenCV 颜色/亮度阈值分割
    - 轮廓提取
    - 最小面积旋转外接矩形
    - Cornell-style 抓取矩形评估
 
-2. VLM-guided geometric pipeline
+2. **VLM-guided geometric pipeline**
    - RGB 图像 + 文本 prompt
    - Grounding DINO 开放词汇目标定位
    - 在 VLM box 内运行 OpenCV 几何后端
    - 生成并评估 2D 抓取矩形
 
-当前全量 Cornell 数据集结果：
+3. **VLM-guided CNN pipeline**
+   - RGB 图像 + 文本 prompt
+   - Grounding DINO 开放词汇目标定位
+   - VLM crop → 轻量 CNN 回归抓取矩形参数
+   - 端到端评估
 
-| 方法 | 样本数 | 成功数 | 成功率 | 平均 best IoU | 平均角度误差 |
-|---|---:|---:|---:|---:|---:|
-| Traditional CV baseline | 885 | 504 | 56.95% | 0.3360 | 29.62° |
-| VLM-guided geometric pipeline | 885 | 649 | 73.33% | 0.4182 | 14.81° |
+当前全量 Cornell 数据集结果（885 样本）：
+
+| 方法 | 定位前端 | 抓取后端 | 成功数 | 成功率 | 平均 best IoU | 平均角度误差 |
+|---|---:|---:|---:|---:|---:|---:|
+| Traditional CV baseline | 无（全图阈值） | OpenCV 几何 | 504 | 56.95% | 0.3360 | 29.62° |
+| VLM + Geometric backend | Grounding DINO | OpenCV 几何 | 649 | 73.33% | 0.4182 | **14.81°** |
+| VLM + CNN backend | Grounding DINO | CNN regressor | 647 | 73.11% | **0.4476** | 15.97° |
+
+**Test set 对比**（目录 09-10，85 个 CNN 未见过物体实例）：
+
+| 方法 | Test 成功率 |
+|---|---|
+| VLM + Geometric backend | 75.3% (64/85) |
+| VLM + CNN backend | **81.2% (69/85)** |
 
 Grounding DINO 使用 prompt `small object` 在当前 Cornell 实验中实现了 885 / 885 的目标检测结果。
+
+### 关键发现
+
+- **VLM 定位带来最大提升**：从 56.95% → 73.33%，证明 VLM 作为定位前端价值显著
+- **CNN 泛化更好**：在 unseen objects 上 81.2% vs 几何后端 75.3%
+- **CNN IoU 更高**：0.4476 vs 0.4182，证明学习式方法的位置/尺寸预测更准确
+- **几何方法角度更准**：14.81° vs 15.97°，"长轴垂直方向"启发式规则是有效的角度先验
 
 ## 仓库结构
 
@@ -55,11 +76,14 @@ src/
     ├── prompts.py
     ├── run_grounding_dino_localization.py
     ├── run_vlm_assisted_grasp.py
+    ├── run_cnn_grasp.py
+    ├── analyze_failures.py
     ├── INSTALL.md
     └── README.md
 
 docs/
 ├── debug_log_cornell_baseline.md
+├── failure_analysis.md
 └── weekly_progress_2026-07-06.md
 ```
 
@@ -91,7 +115,8 @@ pcd0100.txt        点云文件
 opencv-python
 numpy
 Pillow
-torch
+torch (2.5.1+cu121)
+torchvision
 transformers
 ```
 
@@ -145,6 +170,18 @@ conda run -n msc-grasp python src/vlm/run_grounding_dino_localization.py --all -
 conda run -n msc-grasp python src/vlm/run_vlm_assisted_grasp.py
 ```
 
+训练并评估 VLM-guided CNN grasp backend：
+
+```bash
+conda run -n msc-grasp python src/vlm/run_cnn_grasp.py --mode all --device cuda
+```
+
+运行失败案例分析：
+
+```bash
+python3 src/vlm/analyze_failures.py
+```
+
 ## 输出文件
 
 实验输出默认保存到：
@@ -164,6 +201,12 @@ data/processed/vlm/localization/grounding_dino_generic_small_object_summary.json
 
 data/processed/vlm/grasp/vlm_assisted_grasp_predictions.csv
 data/processed/vlm/grasp/vlm_assisted_grasp_summary.json
+data/processed/vlm/grasp/failure_analysis.csv
+
+data/processed/vlm/cnn_grasp/cnn_grasp_predictions.csv
+data/processed/vlm/cnn_grasp/cnn_grasp_summary.json
+data/processed/vlm/cnn_grasp/cnn_grasp_model.pt
+data/processed/vlm/cnn_grasp/training_history.json
 ```
 
 这些结果文件不上传到 GitHub，避免仓库变大，也保证代码仓库只保存可复现逻辑。
@@ -181,17 +224,23 @@ angle error <= 30 degrees
 
 ## 下一步计划
 
-下一阶段重点不是继续微调 VLM，而是分析 VLM-guided geometric pipeline 的失败案例，并实现学习式抓取框后端：
+三条实验 pipeline 已经全部完成。下一阶段重点转向：
 
 ```text
-RGB image + prompt
-    -> VLM localization
-    -> VLM crop
-    -> CNN grasp regressor
-    -> 2D grasp rectangle
+1. 论文写作
+   - 填充 dissertation LaTeX 各章节
+   - 整理实验图表和三类方法对比
+   - 完成 Introduction / Background / Methodology / Results / Discussion
+
+2. 补充分析（如有时间）
+   - CNN 预测的 per-sample 错误分析
+   - 探索几何+CNN 混合后端（几何初始化角度 + CNN 回归位置）
+   - 在更难数据集（Jacquard）上验证泛化性
 ```
 
-当前判断是：VLM 定位已经比较稳定，主要瓶颈已经转移到 VLM box 之后的抓取矩形生成后端。
+当前核心结论已经形成：VLM 零样本定位显著提升抓取检测（+16.4%），瓶颈在抓取后端；
+CNN 学习式后端在 unseen objects 上泛化优于几何后端（81.2% vs 75.3%），
+但几何后端的角度先验仍然有价值。
 
 ## 不上传到 GitHub 的内容
 
