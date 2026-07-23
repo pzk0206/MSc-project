@@ -41,7 +41,8 @@
 │   │   ├── generate_supervisor_progress_report.py
 │   │   ├── generate_supervisor_progress_report_en.py
 │   │   ├── supervisor_progress_report_2026-07-23.pdf
-│   │   └── supervisor_progress_report_2026-07-23_en.pdf
+│   │   ├── supervisor_progress_report_2026-07-23_en.pdf
+│   │   └── supervisor_progress_report_speaking_notes_bilingual.md
 │   ├── worklog/
 │   │   ├── WORKLOG.md
 │   │   ├── weekly_progress_2026-07-06.md
@@ -81,6 +82,7 @@
 | `docs/reporting/generate_supervisor_progress_report_en.py` | 生成三页英文导师项目进展汇报 PDF |
 | `docs/reporting/supervisor_progress_report_2026-07-23.pdf` | 2026-07-23 导师项目进展汇报 |
 | `docs/reporting/supervisor_progress_report_2026-07-23_en.pdf` | 2026-07-23 英文导师项目进展汇报 |
+| `docs/reporting/supervisor_progress_report_speaking_notes_bilingual.md` | 英文汇报讲稿、中文提示和常见问答 |
 | `uog_dissertation_outline/l4proj.tex` | 毕业论文主 LaTeX 文档 |
 | `uog_dissertation_outline/l4proj.bib` | 毕业论文 BibTeX 文献库 |
 
