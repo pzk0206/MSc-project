@@ -204,7 +204,16 @@ def draw_page_1(pdf):
         spine.set_linewidth(1.0)
     text(ax, 0.8675, 0.565, "VLM 定位与抓取预测示例", size=7.5, color=MID_GREY, ha="center")
 
-    text(ax, 0.055, 0.525, "三条实验流程", size=13, color=NAVY, bold=True)
+    text(
+        ax,
+        0.055,
+        0.565,
+        "Cornell rectangle metric：预测框与任一正抓取标注同时满足两个条件即成功"
+        "（Jiang et al., 2011；Lenz et al., 2015）",
+        size=8.2,
+        color=MID_GREY,
+    )
+    text(ax, 0.055, 0.515, "三条实验流程", size=13, color=NAVY, bold=True)
     pipeline_card(
         ax,
         0.055,
@@ -383,12 +392,13 @@ def draw_page_3(pdf):
         ax,
         0.543,
         0.332,
-        "1. Liu et al. (2023), Grounding DINO：开放集目标检测\n"
-        "2. Morrison et al. (2018), GG-CNN：实时生成式抓取预测，\n"
-        "   并使用 sin(2θ)、cos(2θ) 表示平行夹爪角度",
-        size=8.8,
+        "1. Jiang et al. (2011)：抓取矩形表示与矩形评估\n"
+        "2. Lenz et al. (2015)：明确 30° + IoU 25% 成功标准\n"
+        "3. Liu et al. (2023)：Grounding DINO 开放集目标检测\n"
+        "4. Morrison et al. (2018)：GG-CNN 与双角度编码",
+        size=7.8,
         color=DARK,
-        linespacing=1.5,
+        linespacing=1.42,
     )
 
     rounded_box(ax, 0.055, 0.112, 0.89, 0.075, NAVY)
