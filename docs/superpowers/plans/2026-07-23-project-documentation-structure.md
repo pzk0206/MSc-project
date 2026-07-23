@@ -504,6 +504,7 @@ for source in Path(".").rglob("*.md"):
     if ".git" in source.parts:
         continue
     text = source.read_text(encoding="utf-8")
+    text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
     for raw in re.findall(r"!?\[[^\]]*\]\(([^)]+)\)", text):
         destination = raw.strip().split()[0].strip("<>")
         if destination.startswith(("http://", "https://", "mailto:", "#")):
