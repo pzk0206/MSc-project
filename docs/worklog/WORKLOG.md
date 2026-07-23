@@ -1,21 +1,22 @@
-# Project Worklog
+# 项目工作日志
 
-This file is the entry point for reviewing completed project work. Detailed reports remain in dated files.
+本文是回顾已完成项目工作的入口。详细内容保留在按日期命名的周报中。
 
-## 2026-07-23 — Documentation structure
+## 2026-07-23 — 文档结构整理
 
-- Reorganized project documentation by audience and purpose.
-- Added durable AI context and code-organization guidance.
+- 按读者和用途重新整理项目文档。
+- 增加供 AI 恢复上下文的文档和代码组织规范。
+- 将项目文档的标题、说明、导航和回顾内容统一为中文。
 
-## 2026-07-16 — Failure analysis and CNN grasp backend
+## 2026-07-16 — 失败分析与 CNN 抓取后端
 
-- Completed geometric-pipeline failure analysis.
-- Added and evaluated the VLM-guided CNN grasp backend.
-- Recorded single-run and five-run results.
-- Details: [Weekly progress — 2026-07-16](weekly_progress_2026-07-16.md)
+- 完成几何实验流程的失败案例分析。
+- 新增并评估 VLM 引导的 CNN 抓取后端。
+- 记录单次实验和五次重复实验结果。
+- 详情：[2026-07-16 周报](weekly_progress_2026-07-16.md)
 
-## 2026-07-06 — Baseline and VLM-guided geometric pipeline
+## 2026-07-06 — 基线与 VLM 引导的几何实验流程
 
-- Completed Cornell parsing and the traditional CV baseline.
-- Completed Grounding DINO localization and VLM-assisted geometric grasp detection.
-- Details: [Weekly progress — 2026-07-06](weekly_progress_2026-07-06.md)
+- 完成 Cornell 数据解析和传统计算机视觉基线。
+- 完成 Grounding DINO 定位及 VLM 辅助的几何抓取检测。
+- 详情：[2026-07-06 周报](weekly_progress_2026-07-06.md)

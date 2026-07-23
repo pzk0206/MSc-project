@@ -1,35 +1,35 @@
-# Project Documentation Structure Implementation Plan
+# 项目文档结构实施计划与完成记录
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> 本文件记录项目文档重组的实施范围、执行步骤和验证结果。路径、命令及 Git 提交信息保持原样，便于复查。
 
-**Goal:** Reorganize the project documentation into stable AI-context, debugging, planning, and worklog areas, with repository instructions that make Codex load the right context before future tasks.
+**目标：** 将项目文档整理为稳定的 AI 上下文、调试、计划和工作日志区域，并通过仓库指令确保 Codex 在后续任务开始前读取正确的项目上下文。
 
-**Architecture:** A root `AGENTS.md` acts as the automatically discovered instruction entry point. Focused documents under `docs/agent/` separate current state, stable project background, current repository layout, and future code-organization rules; detailed historical documents are moved without losing their content.
+**结构设计：** 根目录的 `AGENTS.md` 是 Codex 自动发现的指令入口。`docs/agent/` 中的四个文档分别负责当前状态、稳定背景、仓库结构和代码组织规则；详细历史文档按调试、计划和工作日志分类保存。
 
-**Tech Stack:** Markdown, Git, Bash path/link validation.
+**使用技术：** Markdown、Git、Bash 路径与链接检查。
 
-## Global Constraints
+## 全局约束
 
-- Do not modify experiment code, model behavior, datasets, or result files.
-- Preserve all existing detailed documentation content.
-- Move existing documents instead of leaving duplicate copies.
-- Keep the user's unrelated uncommitted changes intact.
-- Use relative links between Markdown files.
-- Treat the current `README.md` result table as the latest source for summary metrics.
-- Do not generate a PDF in this change.
+- 不修改实验代码、模型行为、数据集或实验结果文件。
+- 完整保留已有详细文档内容。
+- 移动原文档，不保留重复副本。
+- 保留用户已有的无关未提交修改。
+- Markdown 文档之间使用相对链接。
+- 以当前 `README.md` 的结果表作为汇总指标的最新来源。
+- 本次整理不生成 PDF。
 
-## File Structure
+## 文件结构
 
-**Create**
+### 新建文件
 
-- `AGENTS.md` — durable repository instructions automatically loaded by Codex.
-- `docs/agent/CODE_ORGANIZATION.md` — rules for placing and splitting future code.
-- `docs/agent/CURRENT_STATUS.md` — concise, current AI handoff.
-- `docs/agent/PROJECT_OVERVIEW.md` — stable research and method overview.
-- `docs/agent/PROJECT_STRUCTURE.md` — current repository map and commands.
-- `docs/worklog/WORKLOG.md` — reverse-chronological worklog index.
+- `AGENTS.md`：Codex 自动读取的仓库级工作说明。
+- `docs/agent/CODE_ORGANIZATION.md`：新代码放置和模块拆分规则。
+- `docs/agent/CURRENT_STATUS.md`：简明的当前项目状态。
+- `docs/agent/PROJECT_OVERVIEW.md`：稳定的研究背景和方法概览。
+- `docs/agent/PROJECT_STRUCTURE.md`：当前仓库结构、模块职责和命令。
+- `docs/worklog/WORKLOG.md`：按时间倒序排列的工作日志入口。
 
-**Move**
+### 移动文件
 
 - `docs/debug_log_cornell_baseline.md` → `docs/debugging/BUGLOG.md`
 - `docs/failure_analysis.md` → `docs/debugging/FAILURE_ANALYSIS.md`
@@ -37,516 +37,185 @@
 - `docs/weekly_progress_2026-07-06.md` → `docs/worklog/weekly_progress_2026-07-06.md`
 - `docs/weekly_progress_2026-07-16.md` → `docs/worklog/weekly_progress_2026-07-16.md`
 
-**Modify**
+### 修改文件
 
-- `README.md` — show the new documentation layout and point readers to the entry documents.
-- `docs/debugging/BUGLOG.md` — add a navigation preface without removing history.
-- Markdown files containing old paths — replace only the affected references.
+- `README.md`：展示新的文档结构和入口。
+- `docs/debugging/BUGLOG.md`：增加导航说明，不删除历史内容。
+- `docs/worklog/weekly_progress_2026-07-16.md`：更新失败分析文件路径。
 
 ---
 
-### Task 1: Move Existing Documents into Purpose-Based Directories
+## 任务一：移动现有文档
 
-**Files:**
+**涉及文件：** 五份调试、分析、计划和周报文档。
 
-- Move: `docs/debug_log_cornell_baseline.md` → `docs/debugging/BUGLOG.md`
-- Move: `docs/failure_analysis.md` → `docs/debugging/FAILURE_ANALYSIS.md`
-- Move: `MSc_项目初步计划书_庞镇坤.md` → `docs/planning/vlm_robotic_grasp_study_plan.md`
-- Move: `docs/weekly_progress_2026-07-06.md` → `docs/worklog/weekly_progress_2026-07-06.md`
-- Move: `docs/weekly_progress_2026-07-16.md` → `docs/worklog/weekly_progress_2026-07-16.md`
+- [x] 移动前记录五份文件的 SHA-256 哈希和行数。
+- [x] 创建 `docs/agent/`、`docs/debugging/`、`docs/planning/` 和 `docs/worklog/`。
+- [x] 将五份文档移动到目标路径。
+- [x] 再次检查哈希和行数，确认内容完全一致。
+- [x] 提交文档移动。
 
-**Interfaces:**
+验证结果：
 
-- Consumes: the five existing Markdown documents and their unchanged content.
-- Produces: stable categorized paths used by all later tasks.
-
-- [ ] **Step 1: Record hashes and line counts before moving**
-
-Run:
-
-```bash
-sha256sum \
-  docs/debug_log_cornell_baseline.md \
-  docs/failure_analysis.md \
-  MSc_项目初步计划书_庞镇坤.md \
-  docs/weekly_progress_2026-07-06.md \
-  docs/weekly_progress_2026-07-16.md
-
-wc -l \
-  docs/debug_log_cornell_baseline.md \
-  docs/failure_analysis.md \
-  MSc_项目初步计划书_庞镇坤.md \
-  docs/weekly_progress_2026-07-06.md \
-  docs/weekly_progress_2026-07-16.md
+```text
+BUGLOG.md                         800 行
+FAILURE_ANALYSIS.md              142 行
+vlm_robotic_grasp_study_plan.md  251 行
+weekly_progress_2026-07-06.md    226 行
+weekly_progress_2026-07-16.md    152 行
 ```
 
-Expected: all five paths exist and produce a hash and non-zero line count.
+对应提交：
 
-- [ ] **Step 2: Create the target directories and move the files**
-
-Run:
-
-```bash
-mkdir -p docs/agent docs/debugging docs/planning docs/worklog
-mv docs/debug_log_cornell_baseline.md docs/debugging/BUGLOG.md
-mv docs/failure_analysis.md docs/debugging/FAILURE_ANALYSIS.md
-mv MSc_项目初步计划书_庞镇坤.md docs/planning/vlm_robotic_grasp_study_plan.md
-mv docs/weekly_progress_2026-07-06.md docs/worklog/weekly_progress_2026-07-06.md
-mv docs/weekly_progress_2026-07-16.md docs/worklog/weekly_progress_2026-07-16.md
+```text
+838741f：按用途整理项目历史文档
 ```
 
-Expected: every source path is absent and every target path exists.
+## 任务二：增加持久项目指令和代码组织规则
 
-- [ ] **Step 3: Verify that the moves preserved content**
+**新建文件：**
 
-Run the same `sha256sum` and `wc -l` commands against the five target paths.
+- `AGENTS.md`
+- `docs/agent/CODE_ORGANIZATION.md`
 
-Expected: hashes and line counts match Step 1 exactly.
+- [x] 在 `AGENTS.md` 中规定每次任务开始前的阅读顺序。
+- [x] 规定工作过程中应保护用户修改并只记录已验证结论。
+- [x] 规定任务结束后何时更新状态、工作日志和项目结构。
+- [x] 在代码组织规范中说明各源码目录的功能边界。
+- [x] 说明共享逻辑、入口脚本和模块拆分规则。
+- [x] 验证所有指令引用的目标路径。
 
-- [ ] **Step 4: Commit only the document moves**
+对应提交：
 
-```bash
-git add \
-  docs/debug_log_cornell_baseline.md \
-  docs/failure_analysis.md \
-  MSc_项目初步计划书_庞镇坤.md \
-  docs/weekly_progress_2026-07-06.md \
-  docs/weekly_progress_2026-07-16.md \
-  docs/debugging/BUGLOG.md \
-  docs/debugging/FAILURE_ANALYSIS.md \
-  docs/planning/vlm_robotic_grasp_study_plan.md \
-  docs/worklog/weekly_progress_2026-07-06.md \
-  docs/worklog/weekly_progress_2026-07-16.md
-git diff --cached --check
-git commit -m "docs: organize project history by purpose"
+```text
+bad2ad7：增加持久项目组织说明
 ```
 
-Expected: one commit containing only moves of the five documents.
+## 任务三：建立 AI 项目上下文
 
-### Task 2: Add Durable Agent and Code-Organization Instructions
+**新建文件：**
 
-**Files:**
+- `docs/agent/CURRENT_STATUS.md`
+- `docs/agent/PROJECT_OVERVIEW.md`
+- `docs/agent/PROJECT_STRUCTURE.md`
 
-- Create: `AGENTS.md`
-- Create: `docs/agent/CODE_ORGANIZATION.md`
+### 当前状态文档
 
-**Interfaces:**
+- [x] 记录当前研究阶段和三条已完成实验流程。
+- [x] 区分单次 CNN 实验与五次重复实验统计。
+- [x] 记录完整数据集和未见物体测试集结果。
+- [x] 记录已确认结论和下一步优先事项。
+- [x] 增加指向项目概览、结构、调试、计划和工作日志的链接。
 
-- Consumes: target paths established by Task 1 and current source layout under `src/`.
-- Produces: persistent task-start instructions and future module-placement rules.
+必须与 README 一致的指标：
 
-- [ ] **Step 1: Create `AGENTS.md`**
+| 方法 | 成功率 | 平均最佳 IoU | 平均角度误差 |
+|---|---:|---:|---:|
+| 传统计算机视觉基线 | 56.95% | 0.3360 | 29.62° |
+| VLM + 几何后端 | 73.33% | 0.4182 | 14.81° |
+| VLM + CNN 后端（单次实验） | 73.11% | 0.4476 | 15.97° |
+| VLM + CNN 后端（五次实验） | 74.51% ± 1.38% | 0.4510 ± 0.0081 | 16.49° ± 0.72° |
 
-Create a concise repository instruction file containing these exact requirements:
+### 项目概览文档
 
-```markdown
-# Repository Instructions
+- [x] 说明研究主题、问题、数据集和三种对比方法。
+- [x] 明确成功标准为 `IoU >= 0.25` 且角度误差 `<= 30°`。
+- [x] 说明主要发现、研究范围和局限。
 
-## Start every task
+### 项目结构文档
 
-1. Read `docs/agent/CURRENT_STATUS.md`.
-2. If the project background is unclear, read `docs/agent/PROJECT_OVERVIEW.md`.
-3. Before creating, moving, or refactoring code, read:
-   - `docs/agent/PROJECT_STRUCTURE.md`
-   - `docs/agent/CODE_ORGANIZATION.md`
+- [x] 记录 `src/`、`docs/` 和 `uog_dissertation_outline/` 的目录结构。
+- [x] 说明各 Python 文件的主要职责。
+- [x] 记录数据输入、实验输出和数据流。
+- [x] 收录当前常用运行命令。
+- [x] 规定 AI 上下文文档的阅读顺序。
 
-## While working
+对应提交：
 
-- Preserve unrelated user changes in the working tree.
-- Keep code grouped by feature and reuse shared logic through `src/shared/`.
-- Do not record experimental claims unless they are supported by verified output.
-
-## Finish tasks
-
-- Update `docs/agent/CURRENT_STATUS.md` when the project state, results, or next steps change.
-- Add a concise entry to `docs/worklog/WORKLOG.md` for material completed work.
-- Update `docs/agent/PROJECT_STRUCTURE.md` after adding, moving, or removing a major module.
+```text
+46c077e：增加聚焦的 AI 项目上下文
 ```
 
-- [ ] **Step 2: Create `CODE_ORGANIZATION.md`**
+## 任务四：建立人工回顾入口并更新导航
 
-Include the following sections and rules:
+**涉及文件：**
 
-```markdown
-# Code Organization Guidelines
+- `docs/worklog/WORKLOG.md`
+- `docs/debugging/BUGLOG.md`
+- `docs/worklog/weekly_progress_2026-07-16.md`
+- `README.md`
 
-## Purpose
+- [x] 建立按日期倒序排列的项目工作日志。
+- [x] 在调试记录顶部增加当前状态和失败分析链接。
+- [x] 更新 README 的仓库结构。
+- [x] 更新周报中的旧失败分析路径。
+- [x] 只暂存 README 中属于文档结构的修改，保留用户已有结果表修改。
 
-This document defines where new code belongs and when an existing module should be split.
+对应提交：
 
-## Functional boundaries
-
-- `src/shared/`: stable dataset, geometry, evaluation, and visualization utilities reused by two or more pipelines.
-- `src/baseline_cv/`: traditional OpenCV baseline implementation and baseline-only diagnostics.
-- `src/vlm/`: Grounding DINO localization, VLM-guided geometric grasping, CNN grasping, and VLM-only analysis.
-- `uog_dissertation_outline/`: dissertation LaTeX sources and dissertation assets.
-- `data/processed/<pipeline>/`: generated models, predictions, summaries, and plots; never place generated outputs under `src/`.
-
-## Module design rules
-
-1. Group files by feature or pipeline, not by arbitrary file type.
-2. Give each module one clear primary responsibility.
-3. Keep command-line entry points focused on argument parsing and orchestration.
-4. Separate reusable dataset, model, training, evaluation, and visualization logic when each can be understood or tested independently.
-5. Move logic to `src/shared/` only after two or more pipelines genuinely reuse it.
-6. Search for an existing module with the same responsibility before creating a new file.
-7. Avoid parallel implementations of grasp geometry or evaluation metrics.
-8. Preserve existing commands and output schemas during refactors, or document a migration explicitly.
-
-## When to split a file
-
-Split a file when it combines multiple independently changing responsibilities, such as model definition, dataset preparation, training loop, evaluation, and plotting. Do not split solely to reduce line count.
-
-## Documentation maintenance
-
-- Update `PROJECT_STRUCTURE.md` when major modules move or change responsibility.
-- Update `CURRENT_STATUS.md` only when current state or next actions change.
-- Add completed milestones to `../worklog/WORKLOG.md`.
+```text
+982578b：增加项目工作日志与导航
 ```
 
-- [ ] **Step 3: Validate instruction paths**
+## 任务五：验证最终文档系统
 
-Run:
+### 必需文件检查
 
-```bash
-for path in \
-  docs/agent/CURRENT_STATUS.md \
-  docs/agent/PROJECT_OVERVIEW.md \
-  docs/agent/PROJECT_STRUCTURE.md \
-  docs/agent/CODE_ORGANIZATION.md \
-  docs/worklog/WORKLOG.md
-do
-  test -f "$path" || printf 'missing: %s\n' "$path"
-done
+检查以下 11 个文件存在且非空：
+
+```text
+AGENTS.md
+docs/agent/CODE_ORGANIZATION.md
+docs/agent/CURRENT_STATUS.md
+docs/agent/PROJECT_OVERVIEW.md
+docs/agent/PROJECT_STRUCTURE.md
+docs/debugging/BUGLOG.md
+docs/debugging/FAILURE_ANALYSIS.md
+docs/planning/vlm_robotic_grasp_study_plan.md
+docs/worklog/WORKLOG.md
+docs/worklog/weekly_progress_2026-07-06.md
+docs/worklog/weekly_progress_2026-07-16.md
 ```
 
-Expected at this point: only the three agent summaries and `WORKLOG.md` are reported missing; `CODE_ORGANIZATION.md` exists. Those missing paths are delivered in Task 3 and Task 4.
+验证结果：`11 / 11` 个文件存在且非空。
 
-- [ ] **Step 4: Commit the durable instructions**
+### 旧路径检查
 
-```bash
-git add AGENTS.md docs/agent/CODE_ORGANIZATION.md
-git diff --cached --check
-git commit -m "docs: add persistent project organization guidance"
+在 `docs/superpowers/` 历史设计和计划记录之外搜索以下旧路径：
+
+```text
+docs/debug_log_cornell_baseline.md
+docs/failure_analysis.md
+MSc_项目初步计划书_庞镇坤.md
+docs/weekly_progress_2026-07-06.md
+docs/weekly_progress_2026-07-16.md
 ```
 
-Expected: one commit containing only the two instruction documents.
+验证结果：实际项目文档中没有遗留旧路径。
 
-### Task 3: Create the Agent Context Documents
+### Markdown 链接检查
 
-**Files:**
+链接检查规则：
 
-- Create: `docs/agent/CURRENT_STATUS.md`
-- Create: `docs/agent/PROJECT_OVERVIEW.md`
-- Create: `docs/agent/PROJECT_STRUCTURE.md`
+1. 扫描全部 Markdown 文件。
+2. 忽略代码块、网页链接、邮件链接和纯锚点链接。
+3. 将本地链接相对于所在文档解析。
+4. 报告目标不存在的链接。
 
-**Interfaces:**
+验证结果：没有失效的本地 Markdown 文件链接。
 
-- Consumes: current `README.md`, source files under `src/`, moved historical documents, and current Git status.
-- Produces: three focused context layers used through `AGENTS.md`.
+### 变更范围检查
 
-- [ ] **Step 1: Create `CURRENT_STATUS.md` from verified current facts**
+- [x] 实施提交没有包含 Python 源码或 `data/` 下的文件。
+- [x] 用户原有的 `README.md` 结果修改保持未提交。
+- [x] 用户原有的 `src/vlm/run_cnn_grasp.py` 修改保持未提交。
 
-Use this section order:
+链接检查器忽略代码块示例的修正提交：
 
-```markdown
-# Current Project Status
-
-> AI task entry point: read this file before starting project work.
-
-Last updated: 2026-07-23
-
-## Current phase
-## Completed pipelines
-## Latest verified results
-## Confirmed findings
-## Current repository state
-## Next priorities
-## Read next
-## Maintenance rule
+```text
+3e9546a：链接验证时忽略代码示例
 ```
 
-The results table must reproduce the current `README.md` values exactly:
+## 完成状态
 
-- Traditional CV baseline: 504/885, 56.95%, mean best IoU 0.3360, mean angle error 29.62°.
-- VLM + geometric: 649/885, 73.33%, mean best IoU 0.4182, mean angle error 14.81°.
-- VLM + CNN single run: 647/885, 73.11%, mean best IoU 0.4476, mean angle error 15.97°.
-- VLM + CNN five-run mean: success rate 74.51% ± 1.38%, IoU 0.4510 ± 0.0081, angle error 16.49° ± 0.72°.
-- Unseen-object test: geometric 75.3% (64/85), CNN single 81.2% (69/85), CNN five-run mean 82.35% ± 4.53%.
-
-State explicitly that Grounding DINO with prompt `small object` localized all 885 Cornell samples in the current experiment.
-
-- [ ] **Step 2: Create `PROJECT_OVERVIEW.md`**
-
-Use this section order:
-
-```markdown
-# Project Overview
-
-## Research topic
-## Research question
-## Dataset
-## Compared methods
-### 1. Traditional CV baseline
-### 2. VLM-guided geometric pipeline
-### 3. VLM-guided CNN pipeline
-## Evaluation protocol
-## Main findings
-## Scope and limitations
-## Related documents
-```
-
-Describe the Cornell rectangle success criterion exactly as `IoU >= 0.25` and angular error `<= 30°`. Keep this file stable: put dates and short-term next steps in `CURRENT_STATUS.md`, not here.
-
-- [ ] **Step 3: Create `PROJECT_STRUCTURE.md` from the actual repository**
-
-Include:
-
-1. A current directory tree covering `src/`, `docs/`, and `uog_dissertation_outline/`.
-2. A table mapping each Python entry point to its responsibility.
-3. The input location `data/raw/cornell/`.
-4. Output locations under `data/processed/baseline_cv/` and `data/processed/vlm/`.
-5. The existing commands from `README.md`.
-6. A documentation reading order linking the four `docs/agent/` files.
-
-Verify every listed source file with:
-
-```bash
-rg --files src docs uog_dissertation_outline | sort
-```
-
-Expected: every path included in the tree exists; generated data paths are described but need not exist in Git.
-
-- [ ] **Step 4: Compare current-status metrics with README**
-
-Run:
-
-```bash
-rg -n '56\.95|73\.33|73\.11|74\.51|82\.35|0\.4510|16\.49' \
-  README.md docs/agent/CURRENT_STATUS.md
-```
-
-Expected: each current metric appears in both files with the same method label and result scope.
-
-- [ ] **Step 5: Commit the agent context documents**
-
-```bash
-git add \
-  docs/agent/CURRENT_STATUS.md \
-  docs/agent/PROJECT_OVERVIEW.md \
-  docs/agent/PROJECT_STRUCTURE.md
-git diff --cached --check
-git commit -m "docs: add focused agent project context"
-```
-
-Expected: one commit containing only the three agent context files.
-
-### Task 4: Add the Worklog Entry Point and Update Documentation Navigation
-
-**Files:**
-
-- Create: `docs/worklog/WORKLOG.md`
-- Modify: `docs/debugging/BUGLOG.md`
-- Modify: `README.md`
-- Modify: `docs/worklog/weekly_progress_2026-07-16.md`
-
-**Interfaces:**
-
-- Consumes: all paths and summaries created in Tasks 1–3.
-- Produces: human-facing timeline navigation and valid repository-wide links.
-
-- [ ] **Step 1: Create `WORKLOG.md`**
-
-Use reverse chronological order and this structure:
-
-```markdown
-# Project Worklog
-
-This file is the entry point for reviewing completed project work. Detailed reports remain in dated files.
-
-## 2026-07-23 — Documentation structure
-
-- Reorganized project documentation by audience and purpose.
-- Added durable AI context and code-organization guidance.
-
-## 2026-07-16 — Failure analysis and CNN grasp backend
-
-- Completed geometric-pipeline failure analysis.
-- Added and evaluated the VLM-guided CNN grasp backend.
-- Recorded single-run and five-run results.
-- Details: [Weekly progress — 2026-07-16](weekly_progress_2026-07-16.md)
-
-## 2026-07-06 — Baseline and VLM-guided geometric pipeline
-
-- Completed Cornell parsing and the traditional CV baseline.
-- Completed Grounding DINO localization and VLM-assisted geometric grasp detection.
-- Details: [Weekly progress — 2026-07-06](weekly_progress_2026-07-06.md)
-```
-
-- [ ] **Step 2: Add a navigation preface to `BUGLOG.md`**
-
-Immediately below the title, add:
-
-```markdown
-> 本文件保留完整调试历史。当前状态见
-> [`../agent/CURRENT_STATUS.md`](../agent/CURRENT_STATUS.md)，失败模式汇总见
-> [`FAILURE_ANALYSIS.md`](FAILURE_ANALYSIS.md)。
-```
-
-Do not rewrite or delete the existing debugging sections.
-
-- [ ] **Step 3: Update the README documentation tree and entry links**
-
-Replace the old flat `docs/` tree with the new categorized tree. Add a short paragraph after the tree:
-
-```markdown
-后续 AI 会话从 `docs/agent/CURRENT_STATUS.md` 开始；人工回顾从
-`docs/worklog/WORKLOG.md` 开始。代码放置规则见
-`docs/agent/CODE_ORGANIZATION.md`。
-```
-
-Preserve all unrelated README edits, including the five-run CNN results.
-
-- [ ] **Step 4: Find and repair old path references**
-
-Run:
-
-```bash
-rg -n \
-  'docs/debug_log_cornell_baseline\.md|docs/failure_analysis\.md|MSc_项目初步计划书_庞镇坤\.md|docs/weekly_progress_2026-07-(06|16)\.md' \
-  -g '*.md' \
-  -g '!docs/superpowers/**' \
-  .
-```
-
-Replace the two occurrences of `docs/failure_analysis.md` in
-`docs/worklog/weekly_progress_2026-07-16.md` with
-`docs/debugging/FAILURE_ANALYSIS.md`. Do not alter historical paths recorded
-inside the approved design and implementation plan.
-
-Expected: rerunning the command outside `docs/superpowers/` returns no matches.
-
-- [ ] **Step 5: Commit navigation and link updates**
-
-```bash
-git add \
-  docs/debugging/BUGLOG.md \
-  docs/worklog/WORKLOG.md \
-  docs/worklog/weekly_progress_2026-07-16.md
-git add -p README.md
-git diff --cached --check
-git commit -m "docs: add project worklog and navigation"
-```
-
-At the `git add -p README.md` prompt, stage only the documentation-tree and
-entry-link hunk created by this task; leave pre-existing result-table changes
-unstaged. Before committing, inspect `git diff --cached --name-status` and
-unstage any experiment-code path or unrelated file. Expected: only Markdown
-navigation/content files are committed.
-
-### Task 5: Validate the Finished Documentation System
-
-**Files:**
-
-- Verify: `AGENTS.md`
-- Verify: all Markdown files under `docs/`
-- Verify: `README.md`
-
-**Interfaces:**
-
-- Consumes: the completed documentation structure.
-- Produces: evidence that entry points, content, and links are consistent.
-
-- [ ] **Step 1: Verify required files**
-
-Run:
-
-```bash
-for path in \
-  AGENTS.md \
-  docs/agent/CODE_ORGANIZATION.md \
-  docs/agent/CURRENT_STATUS.md \
-  docs/agent/PROJECT_OVERVIEW.md \
-  docs/agent/PROJECT_STRUCTURE.md \
-  docs/debugging/BUGLOG.md \
-  docs/debugging/FAILURE_ANALYSIS.md \
-  docs/planning/vlm_robotic_grasp_study_plan.md \
-  docs/worklog/WORKLOG.md \
-  docs/worklog/weekly_progress_2026-07-06.md \
-  docs/worklog/weekly_progress_2026-07-16.md
-do
-  test -s "$path" || printf 'missing-or-empty: %s\n' "$path"
-done
-```
-
-Expected: no output.
-
-- [ ] **Step 2: Verify old paths are gone**
-
-Run the old-path `rg` command from Task 4.
-
-Expected: no output and exit code 1 outside `docs/superpowers/`, meaning no
-obsolete operational reference remains. Historical source-path descriptions in
-the design and plan are expected.
-
-- [ ] **Step 3: Validate local Markdown links**
-
-Run this read-only link checker over every Markdown file:
-
-```bash
-python3 - <<'PY'
-from pathlib import Path
-import re
-from urllib.parse import unquote
-
-broken = []
-for source in Path(".").rglob("*.md"):
-    if ".git" in source.parts:
-        continue
-    text = source.read_text(encoding="utf-8")
-    text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
-    for raw in re.findall(r"!?\[[^\]]*\]\(([^)]+)\)", text):
-        destination = raw.strip().split()[0].strip("<>")
-        if destination.startswith(("http://", "https://", "mailto:", "#")):
-            continue
-        destination = unquote(destination.split("#", 1)[0])
-        if not destination:
-            continue
-        target = (source.parent / destination).resolve()
-        if not target.exists():
-            broken.append(f"{source}: {raw}")
-
-print("\n".join(broken))
-raise SystemExit(1 if broken else 0)
-PY
-```
-
-Expected: no broken local-file links. If the repository already contains unrelated broken links, list them separately and verify all links changed by this implementation.
-
-- [ ] **Step 4: Verify no source code was changed by this documentation task**
-
-Run:
-
-```bash
-git status --short
-git log --oneline -5
-git show --stat --oneline HEAD
-```
-
-Expected: commits from this plan contain only `AGENTS.md` and Markdown documentation. Pre-existing user modifications such as `src/vlm/run_cnn_grasp.py` remain intact and are not included in documentation commits.
-
-- [ ] **Step 5: Review the two task entry paths**
-
-Read:
-
-```bash
-sed -n '1,220p' AGENTS.md
-sed -n '1,260p' docs/agent/CURRENT_STATUS.md
-sed -n '1,220p' docs/worklog/WORKLOG.md
-```
-
-Expected:
-
-- `AGENTS.md` directs future agents to current context and organization rules.
-- `CURRENT_STATUS.md` is sufficient to identify current progress and next priorities.
-- `WORKLOG.md` provides a concise human-readable timeline with valid report links.
+文档结构整理已经完成。后续 Codex 会话通过根目录 `AGENTS.md` 获得持久指令，并按任务需要读取 `docs/agent/` 中的当前状态、项目概览、项目结构和代码组织规范。项目作者可从 `docs/worklog/WORKLOG.md` 按时间回顾工作，并从 `docs/debugging/` 和 `docs/planning/` 查看详细记录。

@@ -1,21 +1,21 @@
-# Repository Instructions
+# 仓库工作说明
 
-## Start every task
+## 每次任务开始前
 
-1. Read `docs/agent/CURRENT_STATUS.md`.
-2. If the project background is unclear, read `docs/agent/PROJECT_OVERVIEW.md`.
-3. Before creating, moving, or refactoring code, read:
+1. 阅读 `docs/agent/CURRENT_STATUS.md`。
+2. 如果不清楚项目背景，阅读 `docs/agent/PROJECT_OVERVIEW.md`。
+3. 创建、移动或重构代码前，阅读：
    - `docs/agent/PROJECT_STRUCTURE.md`
    - `docs/agent/CODE_ORGANIZATION.md`
 
-## While working
+## 工作过程中
 
-- Preserve unrelated user changes in the working tree.
-- Keep code grouped by feature and reuse shared logic through `src/shared/`.
-- Do not record experimental claims unless they are supported by verified output.
+- 保留工作区中与当前任务无关的用户修改。
+- 按功能组织代码，并通过 `src/shared/` 复用共享逻辑。
+- 未经实际输出验证的实验结论不得写入项目记录。
 
-## Finish tasks
+## 任务完成后
 
-- Update `docs/agent/CURRENT_STATUS.md` when the project state, results, or next steps change.
-- Add a concise entry to `docs/worklog/WORKLOG.md` for material completed work.
-- Update `docs/agent/PROJECT_STRUCTURE.md` after adding, moving, or removing a major module.
+- 项目状态、实验结果或下一步计划发生变化时，更新 `docs/agent/CURRENT_STATUS.md`。
+- 完成实质性工作后，在 `docs/worklog/WORKLOG.md` 中添加简明记录。
+- 新增、移动或删除主要模块后，更新 `docs/agent/PROJECT_STRUCTURE.md`。

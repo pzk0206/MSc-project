@@ -1,11 +1,11 @@
-# Weekly Progress Report — VLM-guided 2D Robotic Grasp Detection
+# 周进展报告——VLM 引导的二维机器人抓取检测
 
 日期：2026-07-06  
-项目方向：VLM-guided 2D Robotic Grasp Rectangle Detection
+项目方向：VLM 引导的二维机器人抓取矩形检测
 
 ## 1. 本周一句话总结
 
-本周完成了 Cornell Grasping Dataset 上的两个完整抓取检测 baseline，并完成全数据集量化对比：传统 OpenCV baseline 成功率为 **56.95%**，VLM-guided geometric pipeline 成功率提升到 **73.33%**。实验表明，VLM 能可靠完成目标定位，当前主要瓶颈已经转移到抓取框生成后端。
+本周完成了 Cornell Grasping Dataset 上的两个完整抓取检测基线，并完成全数据集量化对比：传统 OpenCV 基线成功率为 **56.95%**，VLM 引导的几何实验流程成功率提升到 **73.33%**。实验表明，VLM 能可靠完成目标定位，当前主要瓶颈已经转移到抓取框生成后端。
 
 ## 2. 本周完成的主要工作
 
@@ -18,7 +18,7 @@
   - angle error ≤ 30°。
 - 完成成功/失败案例可视化输出。
 
-### 2.2 Model 1: Traditional CV baseline
+### 2.2 模型一：传统计算机视觉基线
 
 方法流程：
 
@@ -36,13 +36,13 @@ RGB image
 - 作为没有 VLM 的传统方法对照组。
 - 用于判断 VLM 定位是否能改善下游抓取检测。
 
-### 2.3 Model 2: VLM-guided geometric pipeline
+### 2.3 模型二：VLM 引导的几何实验流程
 
 方法流程：
 
 ```text
 RGB image + prompt
-→ Grounding DINO object localization
+→ Grounding DINO 目标定位
 → VLM bounding box
 → OpenCV geometric backend inside VLM box
 → grasp rectangle
@@ -67,8 +67,8 @@ small object
 
 | 方法 | 是否使用 VLM | 后端 | 成功数 | 成功率 | 平均 best IoU | 平均角度误差 |
 |---|---:|---|---:|---:|---:|---:|
-| Traditional CV baseline | 否 | OpenCV geometric backend | 504 / 885 | 56.95% | 0.3360 | 29.62° |
-| VLM-guided geometric pipeline | 是 | OpenCV geometric backend within VLM box | 649 / 885 | 73.33% | 0.4182 | 14.81° |
+| 传统计算机视觉基线 | 否 | OpenCV 几何后端 | 504 / 885 | 56.95% | 0.3360 | 29.62° |
+| VLM 引导的几何实验流程 | 是 | VLM 边界框内的 OpenCV 几何后端 | 649 / 885 | 73.33% | 0.4182 | 14.81° |
 
 VLM localization 单独结果：
 
@@ -78,19 +78,19 @@ VLM localization 单独结果：
 
 ## 4. 关键发现
 
-1. VLM 定位在 Cornell 数据集上非常稳定，Grounding DINO 使用通用 prompt `small object` 实现了 **100% object localization detection rate**。
+1. VLM 定位在 Cornell 数据集上非常稳定，Grounding DINO 使用通用提示词 `small object` 实现了 **100% 的目标定位检测率**。
 
 2. 加入 VLM 定位后，最终抓取检测成功率从 **56.95%** 提升到 **73.33%**。
 
-3. 平均角度误差从 **29.62°** 降低到 **14.81°**，说明 VLM-guided 方法不仅提升了位置匹配，也改善了抓取方向估计。
+3. 平均角度误差从 **29.62°** 降低到 **14.81°**，说明 VLM 引导的方法不仅提升了位置匹配，也改善了抓取方向估计。
 
-4. 当前主要瓶颈不再是 object localization，而是 VLM box 之后的 **grasp rectangle generation backend**。
+4. 当前主要瓶颈不再是目标定位，而是 VLM 边界框之后的**抓取矩形生成后端**。
 
 5. 因此，现阶段不优先进行 VLM 微调。更合理的下一步是分析失败案例，并引入学习式 CNN 抓取框后端。
 
 ## 5. 本周生成的主要代码与结果文件
 
-### Traditional CV baseline
+### 传统计算机视觉基线
 
 代码：
 
@@ -106,7 +106,7 @@ data/processed/baseline_cv/cv_baseline_summary.json
 data/processed/baseline_cv/visualizations/
 ```
 
-### VLM localization
+### VLM 定位
 
 代码：
 
@@ -124,7 +124,7 @@ data/processed/vlm/localization/grounding_dino_generic_small_object_summary.json
 data/processed/vlm/visualizations/localization_checks/generic_small_object/
 ```
 
-### VLM-guided grasp detection
+### VLM 引导的抓取检测
 
 代码：
 
@@ -145,7 +145,7 @@ data/processed/vlm/grasp/visualizations/
 本项目目前可表述为：
 
 ```text
-VLM-guided 2D Robotic Grasp Rectangle Detection
+VLM 引导的二维机器人抓取矩形检测
 ```
 
 更具体地说：
@@ -157,29 +157,29 @@ VLM-guided 2D Robotic Grasp Rectangle Detection
 当前实验路线：
 
 ```text
-Traditional CV baseline
-→ VLM-guided geometric backend
-→ VLM-guided CNN backend
+传统计算机视觉基线
+→ VLM 引导的几何后端
+→ VLM 引导的 CNN 后端
 ```
 
 这可以理解为一个模块化 VLA-style grasp perception pipeline：
 
 ```text
-Vision: RGB / RGB-D image
-Language: prompt
-Action representation: 2D grasp rectangle
+视觉：RGB / RGB-D 图像
+语言：提示词
+动作表示：二维抓取矩形
 ```
 
 ## 7. 下周计划
 
 ### 7.1 失败案例分析
 
-分析 VLM-guided geometric pipeline 中失败的 236 个样本：
+分析 VLM 引导的几何实验流程中失败的 236 个样本：
 
 ```text
-885 total samples
-649 success
-236 failure
+总样本数：885
+成功：649
+失败：236
 ```
 
 重点统计：
@@ -190,22 +190,22 @@ Action representation: 2D grasp rectangle
 - 抓取框宽高不合适；
 - 物体形状不规则导致 OpenCV 几何后端失败。
 
-### 7.2 开始 VLM-guided CNN grasp backend
+### 7.2 开始 VLM 引导的 CNN 抓取后端
 
 计划实现：
 
 ```text
-RGB image + prompt
-→ VLM localization
-→ VLM crop
-→ CNN grasp regressor
-→ grasp rectangle
+RGB 图像 + 提示词
+→ VLM 定位
+→ VLM 裁剪区域
+→ CNN 抓取回归器
+→ 抓取矩形
 ```
 
 第一版 CNN 输入：
 
 ```text
-VLM crop RGB
+VLM 裁剪区域 RGB 图像
 ```
 
 输出：
@@ -223,4 +223,4 @@ cos(2θ)
 
 ## 8. 可以给导师汇报的简短版本
 
-This week, I completed two full baselines on the Cornell Grasping Dataset. The traditional OpenCV-based grasp detection baseline achieved 56.95% success over 885 samples. I then integrated Grounding DINO as a VLM-based object localization front-end using the generic prompt “small object”. Grounding DINO localized all 885 objects successfully, and the final VLM-guided geometric grasp pipeline improved the grasp success rate to 73.33%. The results suggest that VLM localization is highly reliable on Cornell, and the remaining bottleneck is the downstream grasp rectangle generation backend. Next, I will analyse the failure cases and implement a lightweight VLM-guided CNN grasp regressor to replace the hand-crafted geometric backend.
+本周完成了 Cornell Grasping Dataset 上的两条完整基线。传统 OpenCV 抓取检测基线在 885 个样本上取得 56.95% 的成功率。随后，将 Grounding DINO 作为基于 VLM 的目标定位前端，并使用通用提示词“small object”。Grounding DINO 成功定位全部 885 个物体，最终的 VLM 引导几何抓取流程将抓取成功率提升至 73.33%。结果表明，VLM 在 Cornell 数据集上的定位非常可靠，剩余瓶颈在后续抓取矩形生成后端。下一步将分析失败案例，并实现轻量 VLM 引导的 CNN 抓取回归器，以替代手工几何后端。

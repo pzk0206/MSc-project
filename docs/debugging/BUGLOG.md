@@ -1,4 +1,4 @@
-# Cornell 数据集解析与传统 CV Baseline 调试记录
+# Cornell 数据集解析与传统计算机视觉基线调试记录
 
 > 本文件保留完整调试历史。当前状态见
 > [`../agent/CURRENT_STATUS.md`](../agent/CURRENT_STATUS.md)，失败模式汇总见
@@ -15,7 +15,7 @@
 
 1. 理解 Cornell Grasping Dataset 的文件结构；
 2. 验证 RGB 图像与抓取标注是否能够正确对应；
-3. 抽样可视化 ground-truth 抓取矩形；
+3. 抽样可视化真实标注抓取矩形；
 4. 建立正式的数据读取器；
 5. 将 Cornell 四点抓取框转换为中心格式；
 6. 跑出一个传统 OpenCV baseline，作为后续 VLM-assisted pipeline 的对照组。
@@ -189,7 +189,7 @@ POS/NEG 标注都集中在物体附近；
 解析逻辑可以继续用于全数据集处理。
 ```
 
-## 6. 正式 Dataset Parser
+## 6. 正式数据集解析器
 
 接着编写正式数据读取器：
 
@@ -322,11 +322,11 @@ g = {x, y, θ, h, w}
 h 和 w 表示矩形尺寸。
 ```
 
-Lenz et al. (2015) 也说明他们 follow rectangle-based grasp detection method，并使用 Cornell 数据集中的 positive/negative grasping rectangles。更早的 Jiang et al. (2011) 则提出/使用了 RGB-D grasping 的 rectangle representation。
+Lenz 等人（2015）也说明其采用基于矩形的抓取检测方法，并使用 Cornell 数据集中的正负抓取矩形。更早的 Jiang 等人（2011）则提出并使用了 RGB-D 抓取的矩形表示。
 
 因此，本项目把 Cornell 原始四点格式转换为中心格式，目的是让后续预测、IoU 计算和角度误差计算与经典 Cornell grasp detection 文献保持一致。
 
-## 8. 传统 OpenCV Baseline
+## 8. 传统 OpenCV 基线
 
 根据项目计划书，传统 CV baseline 包括：
 
@@ -369,7 +369,7 @@ IoU >= 0.25
 角度误差 <= 30 度
 ```
 
-### 8.1 为什么先做传统 CV baseline？
+### 8.1 为什么先做传统计算机视觉基线？
 
 项目计划书的核心问题之一是比较：
 
@@ -402,18 +402,18 @@ traditional computer vision baseline
 
 ### 8.2 为什么用 IoU 和角度误差判断准确率？
 
-这是 Cornell grasp detection 文献中的标准 rectangle metric。
+这是 Cornell 抓取检测文献中的标准矩形指标。
 
-Lenz et al. (2015) 对 rectangle metric 的定义是：
+Lenz 等人（2015）对矩形指标的定义是：
 
 ```text
-将算法预测的 top-ranked grasping rectangle 与 ground-truth rectangles 比较；
+将算法预测的最高排名抓取矩形与真实标注矩形比较；
 如果方向误差超过 30°，该预测直接被拒绝；
 剩余预测使用 intersection over union；
 如果 IoU 至少达到 25%，则认为预测正确。
 ```
 
-Redmon and Angelova (2015) 也采用同样的 rectangle metric，并明确写出两个条件：
+Redmon 和 Angelova（2015）也采用同样的矩形指标，并明确写出两个条件：
 
 ```text
 1. 抓取角度必须在 ground truth 的 30° 以内；
@@ -426,7 +426,7 @@ Redmon and Angelova (2015) 也采用同样的 rectangle metric，并明确写出
 J(A, B) = |A ∩ B| / |A ∪ B|
 ```
 
-Redmon and Angelova (2015) 还解释了为什么 IoU 阈值不是普通目标检测中常见的 50%，而是 25%：Cornell 的 ground-truth grasps 并不是穷尽所有可能抓取；一个方向正确、但只与某个标注抓取框重合 25% 的矩形，仍然可能是一个可行抓取。
+Redmon 和 Angelova（2015）还解释了为什么 IoU 阈值不是普通目标检测中常见的 50%，而是 25%：Cornell 的真实抓取标注并未穷尽所有可能抓取；一个方向正确、但只与某个标注抓取框重合 25% 的矩形，仍然可能是一个可行抓取。
 
 因此，本项目 baseline 使用：
 
@@ -435,9 +435,9 @@ IoU >= 0.25
 angle error <= 30 degrees
 ```
 
-不是主观设定，而是沿用 Cornell grasp detection 领域常用的 rectangle metric。
+不是主观设定，而是沿用 Cornell 抓取检测领域常用的矩形指标。
 
-## 9. Baseline 调试过程
+## 9. 基线调试过程
 
 初始 baseline 中，预测抓取方向采用物体长轴方向。
 
@@ -505,7 +505,7 @@ data/processed/baseline_cv/visualizations/
 
 这个调整与 Redmon and Angelova (2015) 对抓取矩形的解释一致：抓取矩形的尺寸和方向对应 gripper plates 的位置与方向，而不是简单的物体外接框方向。
 
-## 10. 当前 Baseline 结论
+## 10. 当前基线结论
 
 当前传统 CV baseline 的成功率为：
 
@@ -551,7 +551,7 @@ baseline 评估与可视化
 下一步：
 
 ```text
-进入 VLM / open-vocabulary object localization 阶段。
+进入 VLM / 开放词汇目标定位阶段。
 ```
 
 建议下一步不是直接让 VLM 预测抓取框，而是先做：
@@ -583,15 +583,15 @@ OpenCV 几何抓取后端
 - 调整可视化逻辑，使第二张和第三张为纯 mask 颜色展示，第四张展示 `border=0` 与 `border=150` 的差异区域。
 
 该工作目的是让调试可视化更直观，方便比较 border 裁剪前后的目标区域提取效果。
-## 12. 可以写入 dissertation 的简短表述
+## 12. 可以写入毕业论文的简短表述
 
-英文草稿：
+论文表述草稿：
 
 ```text
-Before integrating open-vocabulary vision-language models, a reproducible traditional computer vision baseline was implemented. The Cornell Grasping Dataset was first parsed and validated through single-sample and multi-sample visual sanity checks. Grasp annotations were converted from four-corner rectangles into a centre-based representation containing position, size and orientation. A simple OpenCV baseline was then constructed using colour/brightness thresholding, contour extraction and rotated bounding boxes. Using the Cornell-style criterion of IoU greater than 0.25 and angle error below 30 degrees, the baseline achieved a success rate of 56.95% over 885 samples. This baseline provides a reference point for evaluating whether VLM-based object localization improves downstream 2D grasp rectangle detection.
+在引入开放词汇视觉语言模型之前，本项目首先实现了一个可复现的传统计算机视觉基线。项目通过单样本和多样本可视化检查解析并验证 Cornell Grasping Dataset，将四点抓取矩形标注转换为包含位置、尺寸和方向的中心参数表示。随后，使用颜色与亮度阈值分割、轮廓提取和旋转边界框构建简单的 OpenCV 基线。在 IoU 大于 0.25 且角度误差小于 30 度的 Cornell 评估标准下，该基线在 885 个样本上取得 56.95% 的成功率。这一结果为评估 VLM 目标定位能否改善后续二维抓取矩形检测提供了参照。
 ```
 
-中文解释：
+简要说明：
 
 ```text
 在引入开放词汇视觉语言模型之前，本项目首先实现了一个可复现的传统计算机视觉 baseline。项目先对 Cornell 数据集进行了单样本和多样本可视化检查，并将抓取标注从四点矩形格式转换为中心点、尺寸和角度格式。随后，使用 OpenCV 的阈值分割、轮廓提取和旋转边界框方法生成 2D 抓取矩形。在 Cornell-style 评估标准下，该传统 CV baseline 在 885 个样本上取得了 56.95% 的成功率。该结果将作为后续 VLM-assisted pipeline 的对照基准。
@@ -604,9 +604,9 @@ Before integrating open-vocabulary vision-language models, a reproducible tradit
 | 使用 Cornell Grasping Dataset | 该数据集是 2D grasp rectangle detection 常用基准，包含 RGB-D 图像和人工抓取矩形标注 | Jiang et al. (2011), Lenz et al. (2015), Redmon and Angelova (2015) |
 | 解析 cpos/cneg 四点矩形 | Cornell ground truth 使用 oriented rectangles 表示抓取 | Jiang et al. (2011), Lenz et al. (2015) |
 | 转换为 center/width/height/angle | 领域中常用五维 2D grasp representation `g={x,y,θ,h,w}` | Redmon and Angelova (2015) |
-| 使用 IoU/Jaccard + angle error 评估 | Cornell rectangle metric 同时考虑位置、尺寸、重合率和方向 | Lenz et al. (2015), Redmon and Angelova (2015) |
-| 设置 angle error <= 30° | Cornell rectangle metric 中方向误差超过 30° 会被拒绝 | Lenz et al. (2015), Redmon and Angelova (2015) |
-| 设置 IoU >= 0.25 | Cornell rectangle metric 中 IoU/Jaccard 至少 25% 认为预测正确 | Lenz et al. (2015), Redmon and Angelova (2015) |
+| 使用 IoU/Jaccard + 角度误差评估 | Cornell 矩形指标同时考虑位置、尺寸、重合率和方向 | Lenz 等（2015），Redmon 和 Angelova（2015） |
+| 设置角度误差 <= 30° | Cornell 矩形指标中方向误差超过 30° 会被拒绝 | Lenz 等（2015），Redmon 和 Angelova（2015） |
+| 设置 IoU >= 0.25 | Cornell 矩形指标中 IoU/Jaccard 至少 25% 认为预测正确 | Lenz 等（2015），Redmon 和 Angelova（2015） |
 | 建立传统 CV baseline | 为后续 VLM-assisted pipeline 提供可解释对照组 | 项目计划书目标；Lenz et al. (2015) 中也比较了手工特征/传统 baseline |
 | 使用 OpenCV 轮廓和旋转矩形 | 用简单几何方法从目标区域生成 oriented rectangle，作为轻量工程 baseline | OpenCV 官方文档；项目计划书中的 OpenCV/轮廓/PCA/旋转边界框方向 |
 
@@ -617,17 +617,17 @@ Before integrating open-vocabulary vision-language models, a reproducible tradit
 
 2. Lenz, I., Lee, H., and Saxena, A. (2015). *Deep Learning for Detecting Robotic Grasps*. The International Journal of Robotics Research.  
    链接：https://arxiv.org/abs/1301.3592  
-   作用：使用 Cornell grasping dataset；说明每张图有多个 positive/negative grasping rectangles；采用 rectangle metric：方向误差超过 30° 拒绝，IoU 至少 25% 认为正确。
+   作用：使用 Cornell 抓取数据集；说明每张图有多个正负抓取矩形；采用矩形指标：方向误差超过 30° 拒绝，IoU 至少 25% 认为正确。
 
 3. Redmon, J., and Angelova, A. (2015). *Real-Time Grasp Detection Using Convolutional Neural Networks*. ICRA 2015.  
    链接：https://arxiv.org/abs/1412.3128  
-   作用：明确使用五维抓取表示 `g={x,y,θ,h,w}`；说明 Cornell grasp labels 是 2D oriented rectangles；采用 rectangle metric：角度 30° 内且 Jaccard/IoU 大于 25%。
+   作用：明确使用五维抓取表示 `g={x,y,θ,h,w}`；说明 Cornell 抓取标签是二维旋转矩形；采用矩形指标：角度误差在 30° 内且 Jaccard/IoU 大于 25%。
 
 4. OpenCV Documentation. *Structural Analysis and Shape Descriptors*.  
    链接：https://docs.opencv.org/4.x/d3/dc0/group__imgproc__shape.html  
    作用：说明 `findContours`、`contourArea`、`minAreaRect`、`rotatedRectangleIntersection` 等几何函数的定义。本项目传统 CV baseline 使用这些函数实现轮廓提取、旋转矩形生成和旋转矩形 IoU 计算。
 
-## 15. VLM-assisted grasp 全量实验记录
+## 15. VLM 辅助抓取全量实验记录
 
 2026-06-30：
 
@@ -638,24 +638,24 @@ Before integrating open-vocabulary vision-language models, a reproducible tradit
 实验流程为：
 
 ```text
-Cornell RGB image
+Cornell RGB 图像
     ↓
-Grounding DINO / open-vocabulary VLM localization
+Grounding DINO / 开放词汇 VLM 定位
     ↓
-VLM object bounding box
+VLM 目标边界框
     ↓
-在 VLM box 附近限制 OpenCV mask 和 contour
+在 VLM 边界框附近限制 OpenCV 掩膜和轮廓
     ↓
-minAreaRect / 几何后端生成 grasp rectangle
+minAreaRect / 几何后端生成抓取矩形
     ↓
-Cornell-style metric 评估
+Cornell 风格指标评估
 ```
 
 该流程对应项目计划书中的 VLM-assisted grasp detection 思路：
 
 - VLM 负责开放词汇目标定位；
 - OpenCV 几何方法负责从目标区域生成 2D 抓取矩形；
-- 最终仍然使用 Cornell grasp rectangle metric 评价，而不是只评价目标检测框。
+- 最终仍然使用 Cornell 抓取矩形指标评价，而不是只评价目标检测框。
 
 ### 15.2. 运行命令
 
@@ -696,7 +696,7 @@ data/processed/vlm/grasp/visualizations/vlm_assisted_success_failure_overview.pn
 
 | 方法 | 样本数 | 成功数 | 成功率 | 平均 best IoU | 平均角度误差 |
 |---|---:|---:|---:|---:|---:|
-| Traditional CV baseline | 885 | 504 | 56.95% | 0.3360 | 29.62° |
+| 传统计算机视觉基线 | 885 | 504 | 56.95% | 0.3360 | 29.62° |
 | VLM-assisted CV | 885 | 649 | 73.33% | 0.4182 | 14.81° |
 
 VLM localization 本身结果：
@@ -743,8 +743,8 @@ fallback 使用数量：0
 原因如下：
 
 ```text
-VLM localization detection rate: 885 / 885 = 100%
-VLM-assisted grasp success rate: 649 / 885 = 73.33%
+VLM 定位检测率：885 / 885 = 100%
+VLM 辅助抓取成功率：649 / 885 = 73.33%
 ```
 
 这说明：
@@ -766,12 +766,12 @@ VLM-assisted grasp success rate: 649 / 885 = 73.33%
 在 VLM 已经可靠定位物体的前提下，如何生成更准确的抓取矩形
 ```
 
-换句话说，当前系统的主要瓶颈已经不是 object localization，而是 grasp generation backend。
+换句话说，当前系统的主要瓶颈已经不是目标定位，而是抓取生成后端。
 
 更严谨的论文表述可以是：
 
 ```text
-Although the initial project plan considered few-shot adaptation or fine-tuning of the VLM, the zero-shot Grounding DINO localization achieved a 100% detection rate on the Cornell dataset using a generic prompt. Therefore, the main limitation was not object localization, but the downstream grasp rectangle generation stage. As a result, this project focuses on analysing and improving the grasp generation backend rather than fine-tuning the VLM at this stage.
+虽然初步项目计划考虑了 VLM 的少样本适应或微调，但零样本 Grounding DINO 使用通用提示词在 Cornell 数据集上取得了 100% 的检测率。因此，当前主要限制不在目标定位，而在后续抓取矩形生成阶段。基于这一结果，本项目现阶段重点分析和改进抓取生成后端，而不是微调 VLM。
 ```
 
 中文解释：
@@ -781,7 +781,7 @@ Although the initial project plan considered few-shot adaptation or fine-tuning 
 ```
 
 这并不意味着 VLM 微调完全没有价值。
-它可以保留为后续扩展或 future work，例如：
+它可以保留为后续扩展或未来工作，例如：
 
 - 当数据集变成更复杂真实场景时，VLM 可能不再 100% 定位成功；
 - 当 prompt 从 generic object 变成多物体语言指令时，VLM adaptation 可能重新变得重要；
@@ -789,15 +789,15 @@ Although the initial project plan considered few-shot adaptation or fine-tuning 
 
 但在当前 Cornell 单目标实验阶段，优先微调 VLM 的收益不如优先改进抓取框生成逻辑。
 
-### 15.7. 可以写入 dissertation 的简短表述
+### 15.7. 可以写入毕业论文的简短表述
 
-英文草稿：
+论文表述草稿：
 
 ```text
-After establishing the traditional computer vision baseline, an open-vocabulary VLM-assisted pipeline was implemented. Grounding DINO was used as a localization front-end with the generic prompt "small object", and the resulting bounding box was used to constrain the OpenCV contour-based grasp rectangle generator. On the full Cornell Grasping Dataset of 885 samples, the VLM-assisted method achieved a grasp detection success rate of 73.33%, compared with 56.95% for the traditional CV baseline. The mean angular error was also reduced from 29.62 degrees to 14.81 degrees. These results suggest that open-vocabulary localization can substantially improve the downstream geometric grasp rectangle pipeline, although the remaining failures indicate that grasp rectangle generation, rather than object localization alone, remains a key bottleneck.
+在建立传统计算机视觉基线后，本项目实现了一条开放词汇 VLM 辅助实验流程。Grounding DINO 使用通用提示词“small object”作为定位前端，其输出的边界框用于限制基于 OpenCV 轮廓的抓取矩形生成器。在包含 885 个样本的完整 Cornell Grasping Dataset 上，VLM 辅助方法取得了 73.33% 的抓取检测成功率，高于传统计算机视觉基线的 56.95%。平均角度误差也从 29.62 度降至 14.81 度。结果表明，开放词汇定位可以显著改善后续几何抓取矩形流程；剩余失败案例则说明，抓取矩形生成而非目标定位本身，已成为主要瓶颈。
 ```
 
-中文解释：
+简要说明：
 
 ```text
 在完成传统计算机视觉 baseline 后，本项目实现了一个 VLM-assisted 抓取检测流程。该流程使用 Grounding DINO 和通用 prompt “small object” 对目标物体进行定位，然后将 VLM 输出的 bounding box 用于限制 OpenCV 轮廓提取和几何抓取框生成。在 Cornell Grasping Dataset 的 885 个样本上，VLM-assisted 方法取得了 73.33% 的抓取检测成功率，高于传统 CV baseline 的 56.95%。同时，平均角度误差也从 29.62 度下降到 14.81 度。该结果说明，开放词汇 VLM 定位能够有效改善后续几何抓取矩形检测，但剩余失败案例也表明，真正的瓶颈已经逐渐转向抓取矩形生成策略本身。

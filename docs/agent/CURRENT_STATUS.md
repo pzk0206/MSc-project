@@ -1,82 +1,82 @@
-# Current Project Status
+# 项目当前状态
 
-> AI task entry point: read this file before starting project work.
+> AI 任务入口：开始项目工作前先阅读本文件。
 
-Last updated: 2026-07-23
+最后更新：2026-07-23
 
-## Current phase
+## 当前阶段
 
-三条核心实验 pipeline 已完成并在 Cornell Grasping Dataset 的 885 个样本上完成评估。当前项目重心已从基础实验实现转向 dissertation 写作、结果整理和补充分析。
+三条核心实验流程已完成，并在 Cornell Grasping Dataset 的 885 个样本上完成评估。当前项目重心已从基础实验实现转向毕业论文写作、结果整理和补充分析。
 
-## Completed pipelines
+## 已完成的实验流程
 
-1. **Traditional CV baseline**
+1. **传统计算机视觉基线**
    - 在整幅 RGB 图像上进行颜色/亮度阈值分割。
    - 提取轮廓并计算最小面积旋转外接矩形。
-   - 使用 Cornell rectangle metric 评估预测抓取框。
-2. **VLM-guided geometric pipeline**
-   - 使用 Grounding DINO 和文本 prompt 完成目标定位。
+   - 使用 Cornell 抓取矩形指标评估预测抓取框。
+2. **VLM 引导的几何实验流程**
+   - 使用 Grounding DINO 和文本提示词完成目标定位。
    - 在定位框内运行 OpenCV 几何抓取后端。
-3. **VLM-guided CNN pipeline**
-   - 使用 Grounding DINO 产生目标 crop。
+3. **VLM 引导的 CNN 实验流程**
+   - 使用 Grounding DINO 产生目标裁剪区域。
    - 使用轻量 CNN 回归抓取矩形参数。
-   - 支持 single run 和 five-run 重复实验汇总。
+   - 支持单次实验和五次重复实验汇总。
 
-## Latest verified results
+## 最新已验证结果
 
-### Full Cornell dataset（885 samples）
+### 完整 Cornell 数据集（885 个样本）
 
-| Method | Success | Success rate | Mean best IoU | Mean angle error |
+| 方法 | 成功数 | 成功率 | 平均最佳 IoU | 平均角度误差 |
 |---|---:|---:|---:|---:|
-| Traditional CV baseline | 504 / 885 | 56.95% | 0.3360 | 29.62° |
-| VLM + geometric backend | 649 / 885 | 73.33% | 0.4182 | **14.81°** |
-| VLM + CNN backend（single run） | 647 / 885 | 73.11% | **0.4476** | 15.97° |
-| VLM + CNN backend（5-run mean ± std） | — | 74.51% ± 1.38% | 0.4510 ± 0.0081 | 16.49° ± 0.72° |
+| 传统计算机视觉基线 | 504 / 885 | 56.95% | 0.3360 | 29.62° |
+| VLM + 几何后端 | 649 / 885 | 73.33% | 0.4182 | **14.81°** |
+| VLM + CNN 后端（单次实验） | 647 / 885 | 73.11% | **0.4476** | 15.97° |
+| VLM + CNN 后端（五次实验均值 ± 标准差） | — | 74.51% ± 1.38% | 0.4510 ± 0.0081 | 16.49° ± 0.72° |
 
-### Unseen-object test set（Cornell directories 09–10, 85 samples）
+### 未见物体测试集（Cornell 目录 09–10，共 85 个样本）
 
-| Method | Test success rate |
+| 方法 | 测试集成功率 |
 |---|---:|
-| VLM + geometric backend | 75.3%（64 / 85） |
-| VLM + CNN backend（single run） | 81.2%（69 / 85） |
-| VLM + CNN backend（5-run mean ± std） | **82.35% ± 4.53%** |
+| VLM + 几何后端 | 75.3%（64 / 85） |
+| VLM + CNN 后端（单次实验） | 81.2%（69 / 85） |
+| VLM + CNN 后端（五次实验均值 ± 标准差） | **82.35% ± 4.53%** |
 
-Grounding DINO 使用 prompt `small object` 在当前实验中成功定位全部 885 个 Cornell 样本。
+Grounding DINO 使用提示词 `small object`，在当前实验中成功定位全部 885 个 Cornell 样本。
 
-## Confirmed findings
+## 已确认的主要发现
 
-- VLM 定位前端带来的提升最大：56.95% → 73.33%。
-- CNN 后端在 unseen objects 上优于几何后端，说明学习式后端的泛化更好。
+- VLM 定位前端带来的提升最大：成功率从 56.95% 提升至 73.33%。
+- CNN 后端在未见物体上优于几何后端，说明学习式后端的泛化更好。
 - CNN 后端的平均 IoU 更高，位置和尺寸预测更准确。
 - 几何后端的角度误差更低，说明“物体长轴的垂直方向”仍是有效的抓取角度先验。
 - 当前主要瓶颈已从目标定位转移到抓取框后端。
 
-## Current repository state
+## 当前仓库状态
 
 - 核心实现位于 `src/shared/`、`src/baseline_cv/` 和 `src/vlm/`。
 - 实验数据和产物位于被 Git 忽略的 `data/` 目录。
-- dissertation LaTeX 框架位于 `uog_dissertation_outline/`。
-- 项目文档已按 AI 上下文、调试、计划和工作日志分类。
+- 毕业论文 LaTeX 框架位于 `uog_dissertation_outline/`。
+- 项目文档已按 AI 上下文、调试、计划和工作日志分类，说明文字统一使用中文。
 - 文档整理没有改变任何实验代码、模型行为或结果文件。
 
-## Next priorities
+## 下一步重点
 
-1. 填充 dissertation 的 Introduction、Background、Methodology、Results 和 Discussion。
+1. 填充毕业论文的引言、背景、方法、结果和讨论章节。
 2. 整理三种方法的实验表格、图像和可复现命令。
-3. 如时间允许，补充 CNN per-sample 错误分析。
+3. 如时间允许，补充 CNN 逐样本错误分析。
 4. 可选探索几何角度先验与 CNN 位置回归结合的混合后端。
 5. 可选在 Jacquard 等更困难的数据集上验证泛化。
 
-## Read next
+## 后续阅读
 
-- 项目研究背景与方法：[PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md)
-- 当前代码和数据结构：[PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md)
-- 新代码放置与拆分规则：[CODE_ORGANIZATION.md](CODE_ORGANIZATION.md)
-- 完整工作时间线：[../worklog/WORKLOG.md](../worklog/WORKLOG.md)
-- 调试历史：[../debugging/BUGLOG.md](../debugging/BUGLOG.md)
-- 失败案例分析：[../debugging/FAILURE_ANALYSIS.md](../debugging/FAILURE_ANALYSIS.md)
-- 研究计划：[../planning/vlm_robotic_grasp_study_plan.md](../planning/vlm_robotic_grasp_study_plan.md)
+- 项目研究背景与方法：[项目概览](PROJECT_OVERVIEW.md)
+- 当前代码和数据结构：[项目结构](PROJECT_STRUCTURE.md)
+- 新代码放置与拆分规则：[代码组织规范](CODE_ORGANIZATION.md)
+- 完整工作时间线：[项目工作日志](../worklog/WORKLOG.md)
+- 调试历史：[调试记录](../debugging/BUGLOG.md)
+- 失败案例分析：[失败案例分析](../debugging/FAILURE_ANALYSIS.md)
+- 研究计划：[VLM 机器人抓取研究计划](../planning/vlm_robotic_grasp_study_plan.md)
 
-## Maintenance rule
+## 维护规则
 
 仅在项目阶段、已验证指标、主要结论或下一步优先级发生变化时更新本文件。历史过程写入 `docs/worklog/`，详细调试记录写入 `docs/debugging/`；不要在这里记录未经验证的实验结果。

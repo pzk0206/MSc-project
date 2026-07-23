@@ -1,34 +1,34 @@
-# Code Organization Guidelines
+# 代码组织规范
 
-## Purpose
+## 用途
 
-This document defines where new code belongs and when an existing module should be split.
+本文规定新代码应该放在哪里，以及现有模块应在什么情况下拆分。
 
-## Functional boundaries
+## 功能边界
 
-- `src/shared/`: stable dataset, geometry, evaluation, and visualization utilities reused by two or more pipelines.
-- `src/baseline_cv/`: traditional OpenCV baseline implementation and baseline-only diagnostics.
-- `src/vlm/`: Grounding DINO localization, VLM-guided geometric grasping, CNN grasping, and VLM-only analysis.
-- `uog_dissertation_outline/`: dissertation LaTeX sources and dissertation assets.
-- `data/processed/<pipeline>/`: generated models, predictions, summaries, and plots; never place generated outputs under `src/`.
+- `src/shared/`：供两条或更多实验流程复用的稳定数据集、几何、评估和可视化工具。
+- `src/baseline_cv/`：传统 OpenCV 基线实现及仅用于该基线的诊断工具。
+- `src/vlm/`：Grounding DINO 定位、VLM 引导的几何抓取、CNN 抓取和仅用于 VLM 的分析。
+- `uog_dissertation_outline/`：毕业论文 LaTeX 源文件和论文素材。
+- `data/processed/<pipeline>/`：生成的模型、预测、汇总和图表；生成文件不得放在 `src/` 中。
 
-## Module design rules
+## 模块设计规则
 
-1. Group files by feature or pipeline, not by arbitrary file type.
-2. Give each module one clear primary responsibility.
-3. Keep command-line entry points focused on argument parsing and orchestration.
-4. Separate reusable dataset, model, training, evaluation, and visualization logic when each can be understood or tested independently.
-5. Move logic to `src/shared/` only after two or more pipelines genuinely reuse it.
-6. Search for an existing module with the same responsibility before creating a new file.
-7. Avoid parallel implementations of grasp geometry or evaluation metrics.
-8. Preserve existing commands and output schemas during refactors, or document a migration explicitly.
+1. 按功能或实验流程组织文件，不要只按文件类型分类。
+2. 每个模块应具有一个清晰的主要职责。
+3. 命令行入口脚本主要负责参数解析和流程编排。
+4. 当数据集、模型、训练、评估和可视化逻辑能够独立理解或测试时，应将其清晰分离。
+5. 只有在两条或更多实验流程确实复用某段逻辑时，才将其移入 `src/shared/`。
+6. 新建文件前，先检查是否已有职责相同的模块。
+7. 避免重复实现抓取框几何或评估指标。
+8. 重构时保持现有命令和输出格式兼容；如必须破坏兼容性，应明确记录迁移方法。
 
-## When to split a file
+## 何时拆分文件
 
-Split a file when it combines multiple independently changing responsibilities, such as model definition, dataset preparation, training loop, evaluation, and plotting. Do not split solely to reduce line count.
+当一个文件同时承担多个可独立变化的职责，例如模型定义、数据准备、训练循环、评估和绘图时，应拆分文件。不要仅仅为了减少行数而拆分。
 
-## Documentation maintenance
+## 文档维护
 
-- Update `PROJECT_STRUCTURE.md` when major modules move or change responsibility.
-- Update `CURRENT_STATUS.md` only when current state or next actions change.
-- Add completed milestones to `../worklog/WORKLOG.md`.
+- 主要模块移动或职责发生变化时，更新 `PROJECT_STRUCTURE.md`。
+- 只有当前状态或下一步行动发生变化时，才更新 `CURRENT_STATUS.md`。
+- 将已完成的重要阶段记录到 `../worklog/WORKLOG.md`。

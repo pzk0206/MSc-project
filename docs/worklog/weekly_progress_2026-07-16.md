@@ -1,17 +1,17 @@
-# Weekly Progress Report — VLM-guided 2D Robotic Grasp Detection
+# 周进展报告——VLM 引导的二维机器人抓取检测
 
 日期：2026-07-16  
-项目方向：VLM-guided 2D Robotic Grasp Rectangle Detection
+项目方向：VLM 引导的二维机器人抓取矩形检测
 
 ## 1. 本周一句话总结
 
-本周完成了 VLM-guided geometric pipeline 的失败案例分析，并实现了第三条实验 pipeline——VLM-guided CNN grasp backend。CNN 后端在全量上与几何后端持平（74.5% vs 73.3%），但在 unseen objects 上泛化明显更好（82.4% ± 4.5% vs 75.3%）。至此，论文计划的三条 pipeline 全部完成。
+本周完成了 VLM 引导的几何实验流程失败案例分析，并实现了第三条实验流程——VLM 引导的 CNN 抓取后端。CNN 后端在完整数据集上与几何后端表现接近（74.5% 对 73.3%），但在未见物体上泛化明显更好（82.4% ± 4.5% 对 75.3%）。至此，论文计划的三条实验流程全部完成。
 
 ## 2. 本周完成的主要工作
 
 ### 2.1 失败案例分析
 
-- 编写 `src/vlm/analyze_failures.py`，对 VLM-guided geometric pipeline 的 236 个失败样本分类
+- 编写 `src/vlm/analyze_failures.py`，对 VLM 引导的几何实验流程中的 236 个失败样本分类
 - 输出 `docs/debugging/FAILURE_ANALYSIS.md` 分析报告
 - 输出 `data/processed/vlm/grasp/failure_analysis.csv` 分类标注
 
@@ -28,13 +28,13 @@
 - 只有 9 个退化案例（VLM 失败但 baseline 成功），说明 VLM 定位几乎不会降低性能
 - 63 个样本 IoU 在 0.20-0.25 之间，离成功仅差一步
 
-### 2.2 Model 3: VLM-guided CNN grasp backend
+### 2.2 模型三：VLM 引导的 CNN 抓取后端
 
 方法流程：
 
 ```text
 RGB image + prompt
-→ Grounding DINO object localization
+→ Grounding DINO 目标定位
 → VLM crop (expanded box)
 → CNN regressor → [cx, cy, width, height, sin(2θ), cos(2θ)]
 → grasp rectangle → Cornell-style evaluation
@@ -57,11 +57,11 @@ Prompt：`small object`
 
 | 方法 | 定位前端 | 抓取后端 | 成功数 | 成功率 | 平均 IoU | 平均角度 |
 |---|---:|---:|---:|---:|---:|---:|
-| Traditional CV baseline | 无（全图阈值） | OpenCV 几何 | 504 | 56.95% | 0.3360 | 29.62° |
+| 传统计算机视觉基线 | 无（全图阈值） | OpenCV 几何 | 504 | 56.95% | 0.3360 | 29.62° |
 | VLM + Geometric backend | Grounding DINO | OpenCV 几何 | 649 | 73.33% | 0.4182 | **14.81°** |
 | VLM + CNN backend (5-run) | Grounding DINO | CNN regressor | — | 74.51% ± 1.38% | **0.4510** ± 0.0081 | 16.49° ± 0.72° |
 
-### 3.1 Test set 泛化对比（目录 09-10，85 个 CNN 未见过物体）
+### 3.1 测试集泛化对比（目录 09-10，85 个 CNN 未见过物体）
 
 | 方法 | Test 成功率 |
 |---|---|
@@ -73,7 +73,7 @@ Prompt：`small object`
 ## 4. 关键发现
 
 1. **VLM 定位贡献最大**：从 56.95% → 73.33%（+16.4%），是三条 pipeline 中最大的一次提升
-2. **CNN 泛化更好**：在 unseen objects 上 82.35% vs 几何后端 75.3%（+7.0%）
+2. **CNN 泛化更好**：在未见物体上为 82.35%，几何后端为 75.3%（提升 7.0%）
 3. **CNN IoU 更高**：0.4510 vs 0.4182，验证了失败分析中的判断——几何后端的主要弱点是位置/尺寸
 4. **几何方法角度更准**：14.81° vs 16.49°，长轴垂直方向启发式规则是有效的角度先验
 5. **两者互补**：CNN 擅长位置/尺寸，几何擅长角度——motivates 混合后端作为进一步方向
@@ -95,7 +95,7 @@ docs/debugging/FAILURE_ANALYSIS.md
 data/processed/vlm/grasp/failure_analysis.csv
 ```
 
-### CNN grasp backend
+### CNN 抓取后端
 
 代码：
 
@@ -126,7 +126,7 @@ README.md  (更新三类方法对比表、实验运行命令、下一步计划)
 
 ```text
 ✅ 文献阅读与数据集准备
-✅ Traditional CV baseline            (56.95%)
+✅ 传统计算机视觉基线                  (56.95%)
 ✅ VLM localization                   (Grounding DINO, 100% detection)
 ✅ VLM + Geometric backend            (73.33%)
 ✅ VLM + CNN backend                  (74.51% ± 1.38%, test 82.35%)
@@ -145,8 +145,8 @@ README.md  (更新三类方法对比表、实验运行命令、下一步计划)
 
 ## 8. 可以给导师汇报的简短版本
 
-This week I completed two major tasks. First, I analysed the 236 failure cases from the VLM-guided geometric pipeline, categorising them into IoU-only failures (126, 53%), angle-only failures (45, 19%), and combined failures (65, 28%). The analysis revealed that over half of the failures had correct grasp orientation but inaccurate position/size — motivating a learning-based backend.
+本周完成了两项主要任务。首先，对 VLM 引导的几何实验流程中的 236 个失败案例进行了分析，将其分为仅 IoU 失败（126 个，53%）、仅角度失败（45 个，19%）和复合失败（65 个，28%）。分析发现，超过一半的失败案例具有正确的抓取方向，但位置或尺寸不准确，因此有必要引入学习式后端。
 
-Second, I implemented and trained a lightweight CNN grasp regressor that takes the VLM crop as input and directly predicts grasp rectangle parameters. Across five independent training runs with different random seeds, the CNN backend achieved 74.51% ± 1.38% on the full Cornell dataset and 82.35% ± 4.53% on unseen test objects, consistently outperforming the geometric backend (73.33% full, 75.3% test). The CNN shows better position/size prediction (IoU 0.4510 vs 0.4182) while the geometric backend retains a slight edge in angle estimation (14.81° vs 16.49°).
+其次，实现并训练了一个轻量 CNN 抓取回归器。该模型以 VLM 裁剪区域作为输入，直接预测抓取矩形参数。在使用不同随机种子进行的五次独立训练中，CNN 后端在完整 Cornell 数据集上取得 74.51% ± 1.38% 的成功率，在未见测试物体上取得 82.35% ± 4.53% 的成功率，均优于几何后端（完整数据集 73.33%，测试集 75.3%）。CNN 的位置和尺寸预测更好（IoU 0.4510 对 0.4182），而几何后端在角度估计上略占优势（14.81° 对 16.49°）。
 
-All three experimental pipelines (Traditional CV, VLM+Geometric, VLM+CNN) are now complete. The remaining work focuses on dissertation writing.
+三条实验流程（传统计算机视觉、VLM + 几何后端、VLM + CNN 后端）现已全部完成。后续工作将重点转向毕业论文写作。

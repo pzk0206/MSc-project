@@ -1,4 +1,4 @@
-# VLM-guided Geometric Pipeline 失败案例分析
+# VLM 引导的几何实验流程失败案例分析
 
 日期：2026-07-16
 
@@ -52,14 +52,14 @@
 - 29 个样本角度误差在 30°-45° 之间，属于边界失败
 - 64 个样本角度误差 > 60°，说明启发式方向规则（长轴垂直方向）在这些物体上完全失效
 
-## 5. 与 Traditional CV Baseline 交叉对比
+## 5. 与传统计算机视觉基线交叉对比
 
 | 对比类型 | 数量 | 分析 |
 |---|---|---|
 | VLM 失败，Baseline 成功 | 9 | **退化案例**：VLM 定位反而降低了抓取检测。需要重点分析 |
 | VLM 失败，Baseline 也失败 | 227 | **难例**：两种方法都无法处理，可能是物体本身难以抓取或标注歧义 |
 
-### VLM 退化案例详情（VLM 失败但 Baseline 成功）
+### VLM 退化案例详情（VLM 失败但基线成功）
 
 | 样本 | VLM IoU | VLM 角度 | BL IoU | BL 角度 | 可能原因 |
 |---|---|---|---|---|---|
@@ -90,7 +90,7 @@
 
 ## 7. 失败原因诊断
 
-基于以上数据，VLM-guided geometric pipeline 的失败主要有以下根本原因：
+基于以上数据，VLM 引导的几何实验流程失败主要有以下根本原因：
 
 ### 7.1 几何后端的固有局限（约占失败的 53%）
 
@@ -114,30 +114,15 @@
 - 这 9 个样本 VLM 定位后的几何抓取反而不如整图 CV baseline
 - 可能原因：VLM box 裁剪过紧，物体轮廓被截断；或 VLM box 包含多个物体，轮廓选择错误
 
-## 8. 对 CNN Backend 的启示
+## 8. 对 CNN 后端的启示
 
 1. **优先级最高**：解决 126 个 '仅 IoU 失败' 样本——CNN 应该能直接学习从 VLM crop 回归更准确的 center/width/height
 2. **角度学习**：45 个角度失败样本说明 sin(2θ)/cos(2θ) 的角度回归比几何规则更灵活
 3. **难例处理**：65 个双失败样本是检验 CNN backend 上限的关键测试集
 4. **VLM box 扩展**：9 个退化案例提示 expand_ratio 可能需要调大，或 CNN 需要接受比 VLM box 更大的输入区域
 
-## 9. 可写入论文的英文草稿
+## 9. 可写入论文的表述草稿
 
 ```text
-Failure analysis of the VLM-guided geometric pipeline on the Cornell dataset
-revealed three distinct failure modes. Of the 236 failed samples,
-126 (53%) failed solely due to
-insufficient IoU despite correct grasp orientation, indicating that the
-hand-crafted geometric backend could not produce accurate grasp centre
-and dimensions even when the grasp direction was correct. A further
-45 (19%) failed solely due to
-angular error exceeding 30 degrees, suggesting that the heuristic of
-using the perpendicular to the object's major axis is unreliable for
-irregularly shaped objects. The remaining
-65 (28%) failed on both criteria.
-Only 9 samples that failed in the VLM-guided pipeline succeeded in the
-traditional CV baseline, confirming that VLM-based localisation rarely
-degrades performance. These findings motivate a learning-based grasp
-backend that can predict grasp parameters directly from the VLM crop,
-bypassing the limitations of hand-crafted geometric rules.
+对 Cornell 数据集上 VLM 引导的几何实验流程进行失败分析后，可以区分出三种失败模式。在 236 个失败样本中，126 个（53%）虽然抓取方向正确，但仅因 IoU 不足而失败，说明即使方向正确，手工几何后端仍无法准确生成抓取中心和尺寸。另有 45 个（19%）仅因角度误差超过 30 度而失败，表明使用物体长轴垂直方向的启发式规则对不规则形状物体并不可靠。其余 65 个样本（28%）同时不满足两个条件。只有 9 个在 VLM 引导流程中失败的样本能够被传统计算机视觉基线正确预测，说明基于 VLM 的定位很少导致性能退化。这些结果支持使用学习式抓取后端直接从 VLM 裁剪区域预测抓取参数，从而绕过手工几何规则的局限。
 ```
