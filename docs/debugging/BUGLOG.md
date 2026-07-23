@@ -1,5 +1,9 @@
 # Cornell 数据集解析与传统 CV Baseline 调试记录
 
+> 本文件保留完整调试历史。当前状态见
+> [`../agent/CURRENT_STATUS.md`](../agent/CURRENT_STATUS.md)，失败模式汇总见
+> [`FAILURE_ANALYSIS.md`](FAILURE_ANALYSIS.md)。
+
 日期：2026-06-26  
 项目：基于开放词汇视觉语言模型的 2D 机器人抓取矩形检测与少样本适应性评估
 

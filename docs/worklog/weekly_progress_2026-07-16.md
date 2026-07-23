@@ -12,7 +12,7 @@
 ### 2.1 失败案例分析
 
 - 编写 `src/vlm/analyze_failures.py`，对 VLM-guided geometric pipeline 的 236 个失败样本分类
-- 输出 `docs/failure_analysis.md` 分析报告
+- 输出 `docs/debugging/FAILURE_ANALYSIS.md` 分析报告
 - 输出 `data/processed/vlm/grasp/failure_analysis.csv` 分类标注
 
 失败模式分布：
@@ -91,7 +91,7 @@ src/vlm/analyze_failures.py
 结果：
 
 ```text
-docs/failure_analysis.md
+docs/debugging/FAILURE_ANALYSIS.md
 data/processed/vlm/grasp/failure_analysis.csv
 ```
 

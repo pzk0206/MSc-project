@@ -60,32 +60,48 @@ Grounding DINO 使用 prompt `small object` 在当前 Cornell 实验中实现了
 ## 仓库结构
 
 ```text
-src/
-├── shared/
-│   ├── cornell_dataset.py
-│   ├── grasp_geometry.py
-│   ├── check_cornell_dataset.py
-│   ├── export_cornell_grasp_labels.py
-│   ├── inspect_sample.py
-│   └── visualize_sample_checks.py
-├── baseline_cv/
-│   ├── run_cv_baseline.py
-│   ├── visualize_mask_pipeline.py
-│   └── visualize_mask_pipeline_batch.py
-└── vlm/
-    ├── prompts.py
-    ├── run_grounding_dino_localization.py
-    ├── run_vlm_assisted_grasp.py
-    ├── run_cnn_grasp.py
-    ├── analyze_failures.py
-    ├── INSTALL.md
-    └── README.md
-
-docs/
-├── debug_log_cornell_baseline.md
-├── failure_analysis.md
-└── weekly_progress_2026-07-06.md
+.
+├── AGENTS.md
+├── src/
+│   ├── shared/
+│   │   ├── cornell_dataset.py
+│   │   ├── grasp_geometry.py
+│   │   ├── check_cornell_dataset.py
+│   │   ├── export_cornell_grasp_labels.py
+│   │   ├── inspect_sample.py
+│   │   └── visualize_sample_checks.py
+│   ├── baseline_cv/
+│   │   ├── run_cv_baseline.py
+│   │   ├── visualize_mask_pipeline.py
+│   │   └── visualize_mask_pipeline_batch.py
+│   └── vlm/
+│       ├── prompts.py
+│       ├── run_grounding_dino_localization.py
+│       ├── run_vlm_assisted_grasp.py
+│       ├── run_cnn_grasp.py
+│       ├── analyze_failures.py
+│       ├── INSTALL.md
+│       └── README.md
+└── docs/
+    ├── agent/
+    │   ├── CURRENT_STATUS.md
+    │   ├── PROJECT_OVERVIEW.md
+    │   ├── PROJECT_STRUCTURE.md
+    │   └── CODE_ORGANIZATION.md
+    ├── debugging/
+    │   ├── BUGLOG.md
+    │   └── FAILURE_ANALYSIS.md
+    ├── planning/
+    │   └── vlm_robotic_grasp_study_plan.md
+    └── worklog/
+        ├── WORKLOG.md
+        ├── weekly_progress_2026-07-06.md
+        └── weekly_progress_2026-07-16.md
 ```
+
+后续 AI 会话从 `docs/agent/CURRENT_STATUS.md` 开始；人工回顾从
+`docs/worklog/WORKLOG.md` 开始。代码放置规则见
+`docs/agent/CODE_ORGANIZATION.md`。
 
 ## 数据集
 
