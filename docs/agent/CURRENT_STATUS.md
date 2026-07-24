@@ -68,16 +68,16 @@ Grounding DINO 使用提示词 `small object`，在当前实验中成功定位�
 
 ## 下一步重点
 
-CNN 结构依据、现代二维抓取文献矩阵、Methodology 和 Results 初稿已经
-完成。论文已包含主结果表、固定 85 样本比较、数据划分图、CNN 结构图和后端
-失败案例图，并通过 Tectonic 完整编译为 22 页 PDF。当前轻量网络明确定位为
-432,454 参数的受控回归基线，不声称为新颖架构。
+CNN 结构依据、现代二维抓取文献矩阵、Methodology、Results 和 General
+Discussion 初稿已经完成。论文已包含主结果表、固定 85 样本比较、数据划分
+图、CNN 结构图、后端失败案例图和复现附录。当前轻量网络明确定位为 432,454
+参数的受控回归基线，不声称为新颖架构。
 
-1. 整理三种方法的最终实验表格、图像和可复现命令。
-2. 按两日可行性门槛实现多头 CNN；失败时回退到系统性逐样本分析。
-3. 完成 Discussion 和现代文献对照。
-4. 完成仿真可行性调查，但不承诺实现完整闭环抓取。
-5. 完成 Introduction、Literature Review、Conclusion 和最终一致性检查。
+1. 按两日可行性门槛实现多头 CNN；失败时回退到系统性逐样本分析。
+2. 根据多头实验结果更新 Results 和 Discussion。
+3. 完成仿真可行性调查，但不承诺实现完整闭环抓取。
+4. 完成 Introduction、Literature Review、Conclusion 和摘要。
+5. 完成最终构建、引用和结果一致性检查。
 
 ## 后续阅读
 

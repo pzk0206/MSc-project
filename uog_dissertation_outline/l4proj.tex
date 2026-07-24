@@ -373,19 +373,142 @@ times more often than the geometric backend.
 \chapter{General Discussion}
 
 \section{Summary and Interpretation of Findings}
-\todo{Interpret the main findings rather than repeating the results. Explain what the results suggest about VLMs for robotic grasp perception.}
+The strongest result is the improvement obtained by adding the Grounding DINO
+front end to an otherwise similar geometric estimator. Whole-dataset success
+increases by 16.38 percentage points, from 56.95\% to 73.33\%, while missing
+predictions fall from 55 to zero. This indicates that, in the controlled
+Cornell setting, restricting segmentation and contour selection to a
+language-grounded region is more consequential than changing the local backend
+from geometry to the current CNN. The finding concerns this generic prompt and
+baseline; it does not establish that a VLM is necessary when a strong
+task-specific detector is available.
+
+The learned backend produces the highest whole-dataset mean IoU
+($0.4510\pm0.0081$), suggesting that it estimates grasp centre and extent more
+closely than fixed short-side rules. In contrast, the geometric backend has the
+lowest mean angle error ($14.81^\circ$ over all images and $12.01^\circ$ on the
+fixed test subset). Its rule of orienting a grasp perpendicular to the object
+long axis is therefore still a useful prior. The two properties should not be
+collapsed into the binary Cornell score: CNN improvements are mainly spatial,
+whereas geometry remains more stable in orientation.
+
+The paired test outcomes reinforce this interpretation. Sixteen images are
+successful only for the CNN and 12 only for geometry. These 28 discordant cases
+show that the two backends are complementary rather than ordered versions of
+one another. A hybrid that learns centre and size while regularising direction
+with a geometric prior is a plausible next experiment, but the current evidence
+does not show that it would improve the combined criterion.
+
+Finally, the apparent strength of the 85-image test result is constrained by
+the split audit. The non-learning traditional baseline rises from 53.17\% on
+training directories to 74.12\% on test directories. Since model generalisation
+cannot cause this increase, directory composition or difficulty is a credible
+confounder. The test result is therefore evidence about a fixed paired subset,
+not a general object-wise generalisation claim.
 
 \section{Relationship to Previous Literature}
-\todo{Compare your findings with the literature reviewed earlier. State where the results are in line with previous work and where they contradict or extend it.}
+The project follows the established Cornell rectangle formulation
+\citep{jiang2011efficient} and its IoU-and-angle success criterion, but its
+reported values are not directly interchangeable with standard Cornell
+leaderboards. Lenz et al.\ use RGB-D input and image-wise/object-wise evaluation
+\citep{lenz2015deep}; Redmon and Angelova also include depth and report standard
+five-fold results for global and multi-grasp regression
+\citep{redmon2015real}. Kumra and Kanan employ a substantially larger RGB-D
+ResNet-based model \citep{kumra2017robotic}. In contrast, this study uses RGB
+VLM crops and a directory-based split.
+
+More recent work also changes the output representation. GG-CNN predicts grasp
+quality, angle, and width at every depth pixel
+\citep{morrison2018closing}; GR-ConvNet and Gaussian-guided generative networks
+continue this dense grasp-map direction
+\citep{kumra2020antipodal,li2022gaussian}. Their higher reported Cornell
+accuracies contextualise the limited capacity of a single global rectangle
+regressor, but do not form a fair numerical ranking because input modalities,
+splits, augmentation, and output multiplicity differ. Park et al.'s 2018
+high-resolution FCNN preprint is additionally excluded from the main comparison
+because that version was withdrawn and superseded.
+
+The language-conditioned role is closer in motivation to recent
+language-driven grasp detection \citep{vuong2024language}, but the tasks remain
+different. Grasp-Anything++ conditions grasp generation on object-specific
+instructions in complex scenes, whereas the present prompt is the same generic
+\texttt{small object} phrase for single-object Cornell images. The contribution
+here is consequently a modular evaluation of open-vocabulary localisation as a
+front end, not a new language-driven grasp benchmark.
+
+Offline rectangle accuracy must also be separated from physical grasp success.
+Physical experiments reported by GG-CNN and GR-ConvNet include sensing,
+calibration, motion, contact, and recovery. A rectangle passing the Cornell
+metric verifies only image-plane agreement with an annotation; it cannot be
+compared directly with a percentage of objects successfully lifted by a robot.
 
 \section{Failure Case Analysis}
-\todo{Discuss localisation failures, angle errors, poor region extraction, difficult object categories, and possible reasons for these failures.}
+The earlier whole-dataset geometric analysis separates its 236 failures into
+126 IoU-only failures, 45 angle-only failures, and 65 failures of both
+conditions. These are observed metric categories, not automatically causal
+diagnoses. In particular, a 100\% localisation coverage rate means only that
+Grounding DINO returned a box; it does not prove that every box tightly and
+correctly localised the object.
+
+The representative cases in Figure~\ref{fig:backend-failures} were chosen by a
+fixed metric rule. For CNN-only samples 10/pcd1008, 10/pcd1013, 10/pcd1005, and
+10/pcd1012, the geometric rectangles have IoU between 0.145 and 0.206, while
+the CNN rectangles reach 0.489--0.627. The observed result is that the learned
+rectangles better match annotated extent. A possible explanation is that the
+contour short-side heuristic underestimates grasp size on these objects;
+confirming that explanation would require an explicit component ablation.
+
+The geometry-only row contains two distinct observations. On 10/pcd1003 the
+CNN has low IoU (0.127), whereas on 10/pcd1001, 09/pcd0945, and 09/pcd0947 its
+angle error exceeds the $30^\circ$ threshold. The latter is consistent with
+unstable orientation regression, while the former is a spatial error. It would
+be inaccurate to assign one common cause to all four cases.
+
+The shared failures are similarly heterogeneous. Sample 10/pcd1000 has a
+near-full-image VLM box and zero IoU for both backends, so poor localisation is
+a plausible upstream contributor. Sample 09/pcd0918 is instead a borderline
+size/position failure: both angle errors are below $4^\circ$, but both IoUs are
+just below 0.25. Samples 10/pcd1016 and 10/pcd1024 have adequate CNN IoU but
+angle errors above $74^\circ$, isolating orientation as the observed failure.
+This case-level separation motivates treating centre/size and direction as
+distinct learning targets.
 
 \section{Practical and Theoretical Implications}
-\todo{Discuss the practical implications for robotic perception and the theoretical implications for using open-vocabulary models in grasp detection.}
+Practically, an open-vocabulary detector can serve as a replaceable perception
+module that narrows the search space for a lightweight grasp estimator. This is
+useful when object names vary or a closed-set detector is unavailable. The
+results also argue for retaining simple geometric information: learned spatial
+regression and analytic orientation priors solve different subsets of cases.
+
+Theoretically, the experiment supports a modular account of error. Language
+grounding addresses target selection, while grasp geometry addresses
+affordance. Strong coverage in the first module does not imply success in the
+second. This distinction is important when evaluating foundation models in
+robotics: semantic localisation can improve a pipeline without itself learning
+contact mechanics or manipulation.
+
+For deployment, the next system stages would be depth recovery, camera-to-robot
+calibration, pre-grasp planning, close-range re-estimation, gripper closure, and
+success detection. The current offline output is best understood as an input to
+those stages, not as a complete robotic grasping system.
 
 \section{Limitations}
-\todo{Discuss limitations such as Cornell-only evaluation, prompt sensitivity, no physical robot testing, limited compute, and the separation between object localisation and grasp estimation.}
+The study has seven principal limitations. First, evaluation uses only Cornell,
+whose mostly uncluttered tabletop images do not represent open-world scenes.
+Second, the paired test subset contains only 85 images, so four additional
+successes correspond to 4.71 percentage points. Third, the directory split is
+not a standard object-wise protocol, and the split audit indicates unequal
+difficulty. Fourth, both backends emit only one grasp and cannot represent
+multiple valid grasp modes.
+
+Fifth, Grounding DINO's 885/885 coverage is not a localisation-accuracy metric;
+a loose or incorrect box can still count as detected. Sixth, the study performs
+no physical robot execution, so it does not measure collision-free reachability,
+gripper contact, lifting, or recovery. Seventh, the CNN is trained on only 600
+images and its five-run test success has a 4.53 percentage-point standard
+deviation. Results are consequently sensitive to training randomness, and the
+lightweight engineering choices should be interpreted as a baseline rather
+than a settled architecture.
 
 %==============================================================================
 \chapter{Conclusion}
@@ -408,13 +531,69 @@ times more often than the geometric backend.
 \chapter{Additional Material}
 
 \section{Additional Figures}
-\todo{Add extra visual examples.}
+The directory-balanced dataset contact sheet is provided in
+Figure~\ref{fig:cornell-splits}, and the category-selected paired backend
+examples are provided in Figure~\ref{fig:backend-failures}. The source records
+used to regenerate these figures are
+\path{representative_samples.csv} and
+\path{sample_comparison.csv}, respectively.
 
 \section{Additional Tables}
-\todo{Add extended quantitative results.}
+\begin{table}[htbp]
+  \centering
+  \caption{Success rate by fixed project split. The CNN row is the final saved
+  seed-46 run and is used only for per-sample analysis.}
+  \label{tab:split-success}
+  \begin{tabular}{lrrr}
+    \toprule
+    Method & Train (600) & Validation (200) & Test (85) \\
+    \midrule
+    Traditional CV & 53.17\% & 61.00\% & 74.12\% \\
+    VLM + geometric backend & 71.00\% & 79.50\% & 75.29\% \\
+    VLM + CNN, seed 46 & 73.83\% & 73.50\% & 80.00\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}
 
 \section{Configuration Details}
-\todo{Add prompts, model versions, hyperparameters, and hardware details.}
+The original experiment environment was recorded as Conda environment
+\texttt{msc-grasp} with PyTorch 2.5.1+\texttt{cu121}. The Grounding DINO
+publisher was \texttt{IDEA-Research}, and the checkpoint was
+\texttt{grounding-dino-tiny}. It used the generic prompt
+\texttt{small object}, box threshold 0.25, and text threshold 0.25. The VLM box
+was expanded by 10\% before local estimation.
+
+The CNN used crop size 224, batch size 32, learning rate $10^{-3}$, weight decay
+$10^{-4}$, a maximum of 80 epochs, and early-stopping patience 20. Repeated
+runs used seeds 42--46.
+
+\subsection*{Core commands}
+\begin{lstlisting}
+conda run -n msc-grasp python src/shared/check_cornell_dataset.py
+conda run -n msc-grasp python src/baseline_cv/run_cv_baseline.py
+conda run -n msc-grasp python \
+  src/vlm/run_grounding_dino_localization.py --all --device cuda
+conda run -n msc-grasp python src/vlm/run_vlm_assisted_grasp.py
+conda run -n msc-grasp python \
+  src/vlm/run_cnn_grasp.py --mode multi --num-runs 5 --device cuda
+conda run -n msc-grasp python src/shared/analyze_cornell_splits.py
+conda run -n msc-grasp python src/vlm/analyze_backend_comparison.py
+\end{lstlisting}
+
+\subsection*{Primary output files}
+\begin{lstlisting}
+data/processed/baseline_cv/cv_baseline_summary.json
+data/processed/vlm/grasp/vlm_assisted_grasp_summary.json
+data/processed/vlm/cnn_grasp/multi_run_summary.json
+data/processed/vlm/cnn_grasp/cnn_grasp_predictions.csv
+data/processed/shared/split_audit/split_metrics.json
+data/processed/shared/split_audit/same_test_subset_metrics.csv
+data/processed/vlm/backend_comparison/comparison_summary.json
+data/processed/vlm/backend_comparison/sample_comparison.csv
+\end{lstlisting}
+
+The old 73.11\% CNN single-run value is not reproduced from these files and is
+therefore excluded from the dissertation's primary evidence.
 
 \end{appendices}
 
