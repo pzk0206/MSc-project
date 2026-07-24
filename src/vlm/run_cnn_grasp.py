@@ -351,11 +351,18 @@ def train_model(
     train_data: list[dict],
     val_data: list[dict],
     device: str = "cuda",
+    seed: int = 42,
 ) -> tuple[CNNGraspRegressor, list[dict]]:
     """训练 CNN 抓取回归网络。"""
     import torch
     import torch.nn as nn
     from torch.utils.data import DataLoader, Dataset
+
+    # 固定随机种子保证可复现
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
     class GraspCropDataset(Dataset):
         def __init__(self, samples: list[dict]):
@@ -672,9 +679,10 @@ def save_visualizations(
                 pred_pts = cv2.boxPoints(pred_rect).astype(np.int32)
                 cv2.polylines(canvas, [pred_pts], True, (255, 0, 0), 2, cv2.LINE_AA)
 
-                # 黄色: VLM box
-                cv2.rectangle(canvas, (int(row["vlm_box_x1"]), int(row["vlm_box_y1"])),
-                              (int(row["vlm_box_x2"]), int(row["vlm_box_y2"])), (0, 255, 255), 1)
+                # 黄色: VLM box (如果有)
+                if "vlm_box_x1" in row and row["vlm_box_x1"] != "":
+                    cv2.rectangle(canvas, (int(float(row["vlm_box_x1"])), int(float(row["vlm_box_y1"]))),
+                                  (int(float(row["vlm_box_x2"])), int(float(row["vlm_box_y2"]))), (0, 255, 255), 1)
 
                 status = "SUCCESS" if row["success"] == 1 else "FAIL"
                 cv2.putText(canvas, status, (20, 35), cv2.FONT_HERSHEY_SIMPLEX,
@@ -741,18 +749,229 @@ def print_comparison_table(cnn_summary: dict) -> None:
     print()
 
 
+def _train_one_run(train_data, val_data, device, seed):
+    """单次训练，返回模型和验证集 best loss。"""
+    import torch
+    model, history = train_model(train_data, val_data, device=device, seed=seed)
+    best_val_loss = min(h["val_loss"] for h in history)
+    return model, best_val_loss
+
+
+def _eval_on_splits(model, dataset, vlm_boxes, device):
+    """在全部样本上评估，并按 train/val/test 分组统计。"""
+    import torch
+
+    rows = []
+    for i in range(len(dataset)):
+        sample = dataset[i]
+        key = (sample["object_directory"], sample["sample_id"])
+        if key not in vlm_boxes:
+            continue
+
+        x1, y1, x2, y2 = vlm_boxes[key]
+        h, w = sample["rgb"].shape[:2]
+        x1, y1 = max(0, min(x1, w - 1)), max(0, min(y1, h - 1))
+        x2, y2 = max(x1 + 1, min(x2, w)), max(y1 + 1, min(y2, h))
+
+        crop = sample["rgb"][y1:y2, x1:x2]
+        if crop.size == 0:
+            continue
+
+        crop_h, crop_w = crop.shape[:2]
+        crop_tensor = crop_to_tensor(crop)
+        prediction = predict_from_crop(model, crop_tensor, crop_w, crop_h, device)
+
+        prediction_img = {
+            "center_x": prediction["center_x"] + x1,
+            "center_y": prediction["center_y"] + y1,
+            "width": prediction["width"],
+            "height": prediction["height"],
+            "angle_degrees": prediction["angle_degrees"],
+        }
+
+        positive_gt = rectangles_to_center_format(sample["positive_rectangles"])
+        evaluation = evaluate_prediction(prediction_img, positive_gt)
+
+        obj_dir = sample["object_directory"]
+        if obj_dir in TRAIN_DIRS:
+            split = "train"
+        elif obj_dir in VAL_DIRS:
+            split = "val"
+        elif obj_dir in TEST_DIRS:
+            split = "test"
+        else:
+            split = "unknown"
+
+        rows.append({
+            "sample_id": sample["sample_id"],
+            "object_directory": obj_dir,
+            "split": split,
+            "success": int(evaluation["success"]),
+            "best_iou": evaluation["best_iou"],
+            "best_angle_error_degrees": evaluation["best_angle_error_degrees"],
+            "pred_center_x": prediction_img["center_x"],
+            "pred_center_y": prediction_img["center_y"],
+            "pred_width": prediction_img["width"],
+            "pred_height": prediction_img["height"],
+            "pred_angle_degrees": prediction_img["angle_degrees"],
+        })
+
+    def stats(subset_rows):
+        if not subset_rows:
+            return {"count": 0, "success_rate": 0.0, "mean_iou": 0.0, "mean_angle": 0.0}
+        return {
+            "count": len(subset_rows),
+            "success_rate": sum(r["success"] for r in subset_rows) / len(subset_rows),
+            "mean_iou": float(np.mean([r["best_iou"] for r in subset_rows])),
+            "mean_angle": float(np.mean([r["best_angle_error_degrees"] for r in subset_rows])),
+        }
+
+    return {
+        "all": stats(rows),
+        "train": stats([r for r in rows if r["split"] == "train"]),
+        "val": stats([r for r in rows if r["split"] == "val"]),
+        "test": stats([r for r in rows if r["split"] == "test"]),
+        "rows": rows,
+    }
+
+
+def build_multi_run_summary(run_records: list[dict]) -> dict:
+    """将逐轮指标汇总为稳定、可序列化的统计结构。"""
+
+    def aggregate(split_name: str) -> dict:
+        rates = [record[split_name]["success_rate"] for record in run_records]
+        ious = [record[split_name]["mean_iou"] for record in run_records]
+        angles = [record[split_name]["mean_angle"] for record in run_records]
+        return {
+            "success_rate_mean": float(np.mean(rates)),
+            "success_rate_std": float(np.std(rates)),
+            "mean_iou_mean": float(np.mean(ious)),
+            "mean_iou_std": float(np.std(ious)),
+            "mean_angle_mean": float(np.mean(angles)),
+            "mean_angle_std": float(np.std(angles)),
+        }
+
+    return {
+        "method": "vlm_cnn_multi_run",
+        "num_runs": len(run_records),
+        "seeds": [int(record["seed"]) for record in run_records],
+        "all": aggregate("all"),
+        "test": aggregate("test"),
+        "per_run": [
+            {
+                "seed": int(record["seed"]),
+                "best_val_loss": float(record["best_val_loss"]),
+                "all_success_rate": float(record["all"]["success_rate"]),
+                "test_success_rate": float(record["test"]["success_rate"]),
+            }
+            for record in run_records
+        ],
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="VLM-guided CNN grasp backend")
-    parser.add_argument("--mode", choices=["train", "eval", "all"], default="all",
-                        help="运行模式: train / eval / all")
+    parser.add_argument("--mode", choices=["train", "eval", "all", "multi"], default="all",
+                        help="运行模式: train / eval / all / multi (多次训练评估)")
     parser.add_argument("--device", default="cuda",
                         help="设备: cuda / cpu")
+    parser.add_argument("--num-runs", type=int, default=5,
+                        help="multi 模式下训练次数")
+    parser.add_argument("--seed", type=int, default=42,
+                        help="单次训练随机种子 (multi 模式下为起始种子)")
     args = parser.parse_args()
 
     import torch
     device = args.device if torch.cuda.is_available() else "cpu"
     print(f"使用设备: {device}")
 
+    # === 多轮训练评估 ===
+    if args.mode == "multi":
+        print("\n>>> 构建数据集...")
+        train_data, val_data, test_data = build_datasets()
+        print(f"训练集: {len(train_data)}  验证集: {len(val_data)}  测试集: {len(test_data)}")
+
+        vlm_boxes = load_vlm_boxes()
+        dataset = CornellGraspDataset(DATASET_ROOT)
+
+        run_records = []
+        for run_idx in range(args.num_runs):
+            seed = args.seed + run_idx
+            print(f"\n{'='*60}")
+            print(f">>> Run {run_idx + 1}/{args.num_runs}  (seed={seed})")
+            print(f"{'='*60}")
+
+            model, best_val_loss = _train_one_run(train_data, val_data, device, seed)
+            print(f"best val_loss = {best_val_loss:.6f}")
+
+            result = _eval_on_splits(model, dataset, vlm_boxes, device)
+            run_records.append({
+                "seed": seed,
+                "best_val_loss": best_val_loss,
+                "all": result["all"],
+                "test": result["test"],
+                "rows": result["rows"],
+            })
+
+            print(f"  Full:      {result['all']['success_rate']*100:.1f}%  "
+                  f"IoU={result['all']['mean_iou']:.4f}  angle={result['all']['mean_angle']:.2f}°")
+            print(f"  Test only: {result['test']['success_rate']*100:.1f}%  "
+                  f"IoU={result['test']['mean_iou']:.4f}  angle={result['test']['mean_angle']:.2f}°")
+
+        # ——— 汇总统计 ———
+        print(f"\n{'='*80}")
+        print(f"多轮训练汇总 (n={args.num_runs})")
+        print(f"{'='*80}")
+
+        for subset_name in ["all", "test"]:
+            rates = [
+                record[subset_name]["success_rate"] * 100
+                for record in run_records
+            ]
+            ious = [record[subset_name]["mean_iou"] for record in run_records]
+            angles = [record[subset_name]["mean_angle"] for record in run_records]
+
+            mean_rate = np.mean(rates)
+            std_rate = np.std(rates)
+            mean_iou = np.mean(ious)
+            std_iou = np.std(ious)
+            mean_angle = np.mean(angles)
+            std_angle = np.std(angles)
+
+            print(f"\n  {subset_name.upper()} set:")
+            print(f"    成功率:    {mean_rate:.2f}% ± {std_rate:.2f}%")
+            print(f"    平均 IoU:  {mean_iou:.4f} ± {std_iou:.4f}")
+            print(f"    平均角度:  {mean_angle:.2f}° ± {std_angle:.2f}°")
+            print(f"    各轮结果:  {[f'{r:.1f}%' for r in rates]}")
+
+        # 保存汇总 JSON
+        summary = build_multi_run_summary(run_records)
+        multi_json = OUTPUT_DIR / "multi_run_summary.json"
+        with open(multi_json, "w", encoding="utf-8") as f:
+            json.dump(summary, f, indent=2)
+        print(f"\n多轮汇总 JSON: {multi_json}")
+
+        # 保存最后一次的 predictions 和可视化
+        last_record = run_records[-1]
+        last_rows = last_record["rows"]
+        save_results(last_rows, {
+            "method_name": "vlm_cnn_multi_run_last",
+            "sample_count": last_record["all"]["count"],
+            "success_count": int(
+                last_record["all"]["success_rate"] * last_record["all"]["count"]
+            ),
+            "success_rate": last_record["all"]["success_rate"],
+            "mean_best_iou": last_record["all"]["mean_iou"],
+            "mean_best_angle_error_degrees": last_record["all"]["mean_angle"],
+            "iou_threshold": IOU_THRESHOLD,
+            "angle_threshold_degrees": ANGLE_THRESHOLD_DEGREES,
+            "predictions_csv": str(PREDICTIONS_CSV),
+        })
+        save_visualizations(last_rows, dataset, max_per_class=10)
+
+        return
+
+    # === 单次训练/评估（原有逻辑） ===
     if args.mode in ("train", "all"):
         print("\n>>> 构建数据集...")
         train_data, val_data, test_data = build_datasets()
@@ -763,7 +982,7 @@ def main() -> None:
             return
 
         print("\n>>> 训练 CNN 抓取回归网络...")
-        model, history = train_model(train_data, val_data, device=device)
+        model, history = train_model(train_data, val_data, device=device, seed=args.seed)
         print(f"训练完成, best val_loss = {min(h['val_loss'] for h in history):.6f}")
 
     if args.mode in ("eval", "all"):
@@ -778,19 +997,34 @@ def main() -> None:
 
         vlm_boxes = load_vlm_boxes()
         dataset = CornellGraspDataset(DATASET_ROOT)
-        rows, summary = evaluate_model(model, [], dataset, vlm_boxes, device=device)
+        result = _eval_on_splits(model, dataset, vlm_boxes, device)
+        rows = result["rows"]
 
         print(f"\nCNN Backend 评估结果:")
-        print(f"  评估样本数: {summary['sample_count']}")
-        print(f"  成功数: {summary['success_count']}")
-        print(f"  成功率: {summary['success_rate']*100:.2f}%")
-        print(f"  平均 best IoU: {summary['mean_best_iou']:.4f}")
-        print(f"  平均角度误差: {summary['mean_best_angle_error_degrees']:.2f}°")
+        for split_name in ["all", "train", "val", "test"]:
+            s = result[split_name]
+            if s["count"] > 0:
+                print(f"  {split_name}: {s['count']} samples, "
+                      f"success={s['success_rate']*100:.1f}%, "
+                      f"IoU={s['mean_iou']:.4f}, angle={s['mean_angle']:.2f}°")
+
+        summary = {
+            "method_name": "vlm_cnn_grasp_regressor_rgb",
+            "sample_count": result["all"]["count"],
+            "success_count": int(result["all"]["success_rate"] * result["all"]["count"]),
+            "success_rate": result["all"]["success_rate"],
+            "mean_best_iou": result["all"]["mean_iou"],
+            "mean_best_angle_error_degrees": result["all"]["mean_angle"],
+            "test_success_rate": result["test"]["success_rate"],
+            "test_mean_iou": result["test"]["mean_iou"],
+            "test_mean_angle": result["test"]["mean_angle"],
+            "iou_threshold": IOU_THRESHOLD,
+            "angle_threshold_degrees": ANGLE_THRESHOLD_DEGREES,
+            "predictions_csv": str(PREDICTIONS_CSV),
+        }
 
         save_results(rows, summary)
         print_comparison_table(summary)
-
-        # 保存可视化
         save_visualizations(rows, dataset, max_per_class=10)
 
 
