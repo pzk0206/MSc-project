@@ -38,8 +38,11 @@
 │   │   ├── BUGLOG.md
 │   │   └── FAILURE_ANALYSIS.md
 │   ├── planning/
+│   │   ├── cnn_architecture_rationale.md
+│   │   ├── modern_2d_grasp_literature_matrix.md
 │   │   └── vlm_robotic_grasp_study_plan.md
 │   ├── reporting/
+│   │   ├── generate_cnn_architecture.py
 │   │   ├── generate_concise_speaking_notes_pdf.py
 │   │   ├── generate_supervisor_progress_report.py
 │   │   ├── generate_supervisor_progress_report_en.py
@@ -85,6 +88,9 @@
 | `src/vlm/run_cnn_grasp.py` | 训练、评估并重复运行 CNN 抓取后端 |
 | `src/vlm/analyze_failures.py` | 汇总 VLM 引导的几何实验流程失败案例 |
 | `src/vlm/analyze_backend_comparison.py` | 在固定测试子集上逐样本比较几何和 CNN 后端 |
+| `docs/planning/cnn_architecture_rationale.md` | 逐项区分当前 CNN 的文献依据与工程选择 |
+| `docs/planning/modern_2d_grasp_literature_matrix.md` | 统一比较现代二维抓取方法的输入、划分、指标和可比性 |
+| `docs/reporting/generate_cnn_architecture.py` | 生成论文使用的 CNN 矢量结构图 |
 | `docs/reporting/generate_supervisor_progress_report.py` | 生成三页中文导师项目进展汇报 PDF |
 | `docs/reporting/generate_supervisor_progress_report_en.py` | 生成三页英文导师项目进展汇报 PDF |
 | `docs/reporting/generate_concise_speaking_notes_pdf.py` | 将简洁双语讲稿转换为适合 iPad 阅读的 PDF |
@@ -95,6 +101,7 @@
 | `docs/reporting/supervisor_progress_report_speaking_notes_concise_bilingual.pdf` | 适合 iPad 竖屏阅读的简洁双语讲稿 |
 | `uog_dissertation_outline/l4proj.tex` | 毕业论文主 LaTeX 文档 |
 | `uog_dissertation_outline/l4proj.bib` | 毕业论文 BibTeX 文献库 |
+| `uog_dissertation_outline/images/cnn_architecture.pdf` | 轻量 CNN 的矢量结构图 |
 
 ## 数据流
 
@@ -150,6 +157,10 @@ conda run -n msc-grasp python src/shared/analyze_cornell_splits.py
 
 # 固定测试子集后端比较
 conda run -n msc-grasp python src/vlm/analyze_backend_comparison.py
+
+# 重新生成 CNN 矢量结构图
+MPLCONFIGDIR=/tmp/msc-mplconfig conda run -n msc-grasp \
+  python docs/reporting/generate_cnn_architecture.py
 ```
 
 依赖安装和 VLM 环境说明见 [`../../src/vlm/INSTALL.md`](../../src/vlm/INSTALL.md)。
