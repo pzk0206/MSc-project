@@ -830,3 +830,30 @@ VLM 辅助抓取成功率：649 / 885 = 73.33%
 - 将多轮汇总提取为可单元测试的纯函数；
 - 保证脚本只有一个 `__main__` 入口；
 - 不覆盖现有实验产物来验证修复。
+
+## 17. 论文模板数学符号包冲突
+
+日期：2026-07-24
+
+### 17.1 现象
+
+使用当前 Tectonic/LaTeX 发行版编译 `l4proj.tex` 时，正文处理前在
+`amssymb.sty` 报错：
+
+```text
+LaTeX Error: Command `\Bbbk' already defined.
+```
+
+### 17.2 根因与验证
+
+`l4proj.cls` 先加载 `newtxmath`，随后再次加载 `amssymb`。两个包都提供
+`\Bbbk`，新版发行版将重复定义视为错误。最小样例稳定复现：
+
+- `newtxmath + amssymb`：相同错误；
+- 仅 `amssymb`：编译成功；
+- `newtxmath + amsmath/amsfonts/amsbsy`：编译成功且常用数学符号正常。
+
+### 17.3 修复
+
+从模板的 AMS 包列表移除重复的 `amssymb`，保留 `newtxmath` 和其他 AMS
+基础包。完整论文随后成功编译为 22 页 PDF，无 LaTeX fatal error。

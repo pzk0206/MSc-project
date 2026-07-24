@@ -79,46 +79,295 @@
 \chapter{Methodology}
 
 \section{Research Design}
-\todo{Describe the overall experimental design. This is a technical dataset-based study, not a questionnaire or human-participant study. Explain the logic of comparing a CV baseline with a VLM-assisted pipeline.}
+This dissertation uses a controlled, dataset-based experiment to examine where
+open-vocabulary localisation is useful in a 2D grasp detection pipeline. No
+human participants or questionnaire data are involved. Three systems are
+evaluated. The first is a traditional computer-vision (CV) baseline that
+operates on the complete image. The second uses Grounding DINO to localise an
+object and applies a deterministic geometric grasp estimator within the
+localised region. The third keeps the same Grounding DINO front end but replaces
+the geometric estimator with a lightweight supervised CNN.
 
-\section{Dataset Selection and Preparation}
-\todo{Describe how the Cornell Grasping Dataset is obtained, organised, parsed, and prepared. Explain RGB/RGB-D inputs, annotation files, train/test split, and ground-truth visualisation.}
+This design separates two questions that would otherwise be confounded:
+whether language-conditioned localisation improves over whole-image
+segmentation, and whether a learned grasp backend improves over a geometric
+backend when both receive the same object crop. All three systems use the same
+Cornell annotations and the same rectangle success criterion. The study is an
+offline perception evaluation; it does not claim that a successful rectangle
+necessarily produces a successful physical grasp.
 
-\section{Task Formulation}
-\todo{Define the input and output of the task. Include the 2D grasp rectangle representation, such as centre, width, height, and angle.}
+\section{Cornell Dataset and Fixed Directory Split}
+The experiments use all 885 RGB images in the Cornell Grasping Dataset. Each
+sample contains one RGB image and multiple positively labelled grasp
+rectangles. The shared data loader parses the four corner points of every
+positive rectangle, associates them with the corresponding image, and converts
+them to a common centre representation for evaluation. Although depth images
+are available in Cornell, all three systems in this study use RGB so that input
+modality is held constant.
+
+For CNN development, Cornell directories 01--06 form the training set (600
+images), directories 07--08 form the validation set (200 images), and
+directories 09--10 form the fixed test subset (85 images). Directory membership
+is used to reduce direct overlap between development and test data. This is a
+project-specific split, not the standard image-wise or object-wise five-fold
+protocol reported in prior Cornell studies. It is therefore described as a
+\emph{fixed 85-sample test subset} rather than as a general unseen-object
+benchmark.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{images/cornell_split_contact_sheet.png}
+  \caption{Representative Cornell images from the training, validation, and
+  fixed test directories. Twelve images were selected from each split, with
+  directory-balanced sampling where possible. The figure documents visible
+  object variation but cannot establish that the three splits have equal
+  difficulty.}
+  \label{fig:cornell-splits}
+\end{figure}
+
+\section{2D Grasp Rectangle Representation}
+A grasp is represented as
+\[
+g=(c_x,c_y,w,h,\theta),
+\]
+where $(c_x,c_y)$ is the rectangle centre, $w$ and $h$ are its dimensions, and
+$\theta$ is the in-plane gripper orientation. This follows the rectangle
+representation introduced for RGB-D grasp detection by
+\citet{jiang2011efficient} and used in subsequent Cornell work
+\citep{lenz2015deep,redmon2015real}. Multiple positive rectangles may be
+associated with an image. A prediction is compared with every positive
+annotation, and the annotation with the highest intersection over union (IoU)
+is used for scoring.
 
 \section{Traditional Computer Vision Baseline}
-\todo{Describe the baseline method and why it is needed as a comparison point. Include image processing, contour extraction, PCA, rotated bounding boxes, or other geometry methods.}
+The baseline applies colour and brightness thresholding to the complete RGB
+image, cleans the binary mask, and extracts external contours. Contours smaller
+than 80 pixels or touching an eight-pixel image boundary are rejected. The
+remaining contour score favours large regions near the image centre. A
+minimum-area rotated rectangle supplies the object centre and principal axes.
+The grasp orientation is set perpendicular to the object's long axis. The
+predicted grasp width is $1.35$ times the object short side, clipped to
+20--120 pixels, and the height is $0.55$ times the short side, clipped to
+15--45 pixels.
 
-\section{VLM-Assisted Grounding Pipeline}
-\todo{Describe the VLM grounding stage, model choice, text prompts, output boxes or regions, and how these outputs enter the grasp estimation pipeline.}
+This method is deliberately simple and deterministic. It provides a
+reproducible reference for measuring the value of localisation, but its
+thresholds and size rules are engineering heuristics rather than learned
+affordances.
 
-\section{Geometric Grasp Rectangle Estimation}
-\todo{Explain how localised regions are converted into grasp rectangles. State the design principles and assumptions behind this conversion.}
+\section{Grounding DINO Localisation Front End}
+The two VLM-guided systems use Grounding DINO, an open-set detector that aligns
+text and image features \citep{liu2023grounding}. Every image receives the same
+generic prompt, \texttt{small object}, rather than a hand-written object name.
+The box and text thresholds are both 0.25. Using one prompt for the complete
+dataset avoids supplying sample-specific class information. The highest-ranked
+valid box is retained and expanded by 10\% before grasp estimation to reduce
+the risk of clipping the object boundary. The saved localisation run produced a
+box for all 885 evaluated images.
 
-\section{Evaluation Metrics and Experimental Protocol}
-\todo{Define localisation IoU, grasp rectangle IoU, angle error, Cornell-style success criteria, compared methods, prompt settings, and ablation studies.}
+\section{VLM-Guided Geometric Backend}
+The geometric backend reuses the baseline's mask and contour operations, but
+restricts the mask to the expanded Grounding DINO box. The largest suitable
+local contour is converted to a grasp with the same minimum-area rectangle and
+short-side rules used by the baseline. Consequently, the difference between
+these two systems is principally the localisation front end. A box-derived
+fallback is implemented for missing contours, although the evaluated run did
+not require it.
 
-\section{Limitations of the Methodology}
-\todo{Discuss methodological limitations, such as dataset size, prompt sensitivity, model deployment constraints, no real robot validation, and optional adaptation risk.}
+\section{VLM-Guided Lightweight CNN Backend}
+The learned backend receives the same expanded VLM crop, resized to
+$224\times224$ RGB and normalised using ImageNet channel statistics. It predicts
+one local grasp because localisation has already isolated the target. The
+network contains four convolution--batch-normalisation--ReLU blocks with
+32, 64, 128, and 256 channels. Spatial resolution is reduced by a stride-two
+first convolution and max pooling. Adaptive global average pooling (GAP)
+produces a 256-dimensional vector, followed by fully connected layers of 128
+and 64 units and a six-dimensional output.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{images/cnn_architecture.pdf}
+  \caption{Lightweight CNN grasp regression baseline used in this study. The
+  complete architecture is an engineering design for the controlled
+  comparison and is not proposed as a novel grasp network.}
+  \label{fig:cnn-architecture}
+\end{figure}
+
+The outputs are
+$[c_x,c_y,w,h,\sin(2\theta),\cos(2\theta)]$. The double-angle representation
+follows the symmetry-aware formulation used by GG-CNN
+\citep{morrison2018closing}: for a parallel-jaw gripper, orientations separated
+by 180 degrees are equivalent. The architecture has 432,454 trainable
+parameters. Its complete layer schedule was not copied from one publication.
+The light channel count and GAP were selected to limit overfitting and parameter
+growth on the 600-image training split. The rectangle task is grounded in prior
+Cornell work, while the exact four blocks and fully connected widths are
+project-specific engineering choices.
+
+\section{Training Protocol and Repeated Runs}
+For each image, the largest-area positive rectangle whose centre lies in the
+VLM crop supplies the regression target. Centre coordinates are normalised by
+crop dimensions; width and height are normalised by the crop diagonal.
+Optimisation uses Smooth L1 loss, Adam with learning rate $10^{-3}$ and weight
+decay $10^{-4}$, batch size 32, and at most 80 epochs. A
+ReduceLROnPlateau scheduler halves the learning rate after eight epochs without
+validation improvement. Training stops after 20 epochs without a lower
+validation loss, and the lowest-loss validation checkpoint is restored.
+
+The experiment is repeated five times with seeds 42--46. For each run, the
+selected checkpoint is evaluated over all 885 images and separately on
+directories 09--10. Results are reported as population mean and standard
+deviation across the five runs. The saved per-sample prediction file belongs to
+the final run (seed 46) and is used only for matched-sample and qualitative
+analysis.
+
+\section{Cornell Rectangle Evaluation}
+For prediction $P$ and ground-truth rectangle $G$, IoU is
+\[
+\operatorname{IoU}(P,G)=\frac{|P\cap G|}{|P\cup G|}.
+\]
+A prediction is successful if its best ground-truth match has
+$\operatorname{IoU}\geq0.25$ and its parallel-gripper angle error is at most
+$30^\circ$. Mean best IoU and mean best angle error are also reported, since
+the binary success rate can hide whether failure is caused mainly by position,
+size, or orientation. Whole-dataset results characterise the implemented
+pipelines. Backend comparison is restricted to the same 85 test images so that
+the geometric and CNN outputs are paired sample by sample.
+
+\section{Methodological Limitations}
+The directory split is not a standard Cornell five-fold protocol, and the
+contact sheet in Figure~\ref{fig:cornell-splits} cannot prove equal shape or
+difficulty distributions. The fixed test subset must therefore not be treated
+as evidence of general unseen-object performance. Grounding DINO results may
+depend on prompt and threshold choices, despite the use of a single prompt
+here. The CNN is trained on a small RGB-only dataset, while many high-performing
+grasp networks use depth and dense multi-grasp outputs. Finally, rectangle
+agreement is an offline proxy: the systems do not estimate depth, collision
+constraints, robot kinematics, or physical grasp success.
 
 %==============================================================================
 \chapter{Results}
 
 \section{Dataset and Implementation Verification}
-\todo{Show that dataset parsing, annotation conversion, and ground-truth visualisation work correctly. Summarise the software/hardware environment if useful.}
+The data audit recovered 600 training, 200 validation, and 85 test images, for
+the expected total of 885. Ground-truth overlays and the split contact sheet
+were inspected to verify image--annotation alignment. The Grounding DINO output
+contained a valid localisation for all 885 samples. The traditional baseline
+failed to produce a contour-based grasp in 55 cases; both VLM-guided evaluated
+runs produced a grasp for every sample.
+
+Figure~\ref{fig:cornell-splits} shows equal numbers of examples from each split
+to avoid allowing the larger training set to dominate visual inspection. The
+examples confirm substantial variation within every split, but visual sampling
+alone does not establish comparable difficulty. A quantitative warning is that
+the traditional baseline succeeded on 53.17\% of training images but 74.12\%
+of test images. The higher test value for a non-learning baseline indicates
+that directories 09--10 may contain easier cases for the implemented image
+processing rules.
 
 \section{Quantitative Results}
-\todo{Present numerical results for the baseline and VLM-assisted method, such as IoU, angle error, and success rate.}
+Table~\ref{tab:main-results} reports the primary whole-dataset comparison. The
+VLM-guided geometric system improves success from 56.95\% to 73.33\%, an
+absolute gain of 16.38 percentage points. It also reduces mean angle error by
+14.81 degrees. The five-run CNN mean is 1.18 points above the geometric
+backend and has higher mean IoU, but its mean angle error is 1.68 degrees
+larger. These results suggest that localisation supplies the largest measured
+gain, while the two local backends offer different strengths.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Whole-dataset results on all 885 Cornell images. CNN values are the
+  mean $\pm$ population standard deviation over seeds 42--46.}
+  \label{tab:main-results}
+  \resizebox{\linewidth}{!}{%
+  \begin{tabular}{lrrrr}
+    \toprule
+    Method & Successful & Success rate & Mean best IoU & Mean angle error \\
+    \midrule
+    Traditional CV baseline & 504/885 & 56.95\% & 0.3360 & $29.62^\circ$ \\
+    VLM + geometric backend & 649/885 & 73.33\% & 0.4182 & $14.81^\circ$ \\
+    VLM + CNN, five runs & --- & $74.51\%\pm1.38\%$ &
+      $0.4510\pm0.0081$ & $16.49^\circ\pm0.72^\circ$ \\
+    \bottomrule
+  \end{tabular}}
+\end{table}
+
+The earlier 73.11\% single-run CNN figure is excluded because its independent
+JSON and per-sample CSV were overwritten by later repeated runs. The aggregate
+five-run file is the provenance source for the CNN row in
+Table~\ref{tab:main-results}.
+
+\subsection{Fixed 85-sample test subset (directories 09--10)}
+Table~\ref{tab:fixed-test} compares the two VLM-guided backends on the same
+85 images. The seed-46 CNN succeeds on 68 images, four more than the geometric
+backend, and attains higher IoU. The geometric method has substantially lower
+angle error. Across five CNN runs, test success is
+$82.35\%\pm4.53\%$, showing that the single saved run is not the most favourable
+run but also that performance varies with training seed.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Results on the fixed 85-sample test subset (directories 09--10).
+  The saved CNN row is seed 46; the final row summarises all five CNN runs.}
+  \label{tab:fixed-test}
+  \resizebox{\linewidth}{!}{%
+  \begin{tabular}{lrrrr}
+    \toprule
+    Method & Successful & Success rate & Mean best IoU & Mean angle error \\
+    \midrule
+    VLM + geometric backend & 64/85 & 75.29\% & 0.3921 & $12.01^\circ$ \\
+    VLM + CNN, seed 46 & 68/85 & 80.00\% & 0.4562 & $21.01^\circ$ \\
+    VLM + CNN, five runs & --- & $82.35\%\pm4.53\%$ &
+      $0.4602\pm0.0200$ & $18.73^\circ\pm2.38^\circ$ \\
+    \bottomrule
+  \end{tabular}}
+\end{table}
 
 \section{Qualitative Results}
-\todo{Present visual examples of predicted and ground-truth grasp rectangles, including successful and unsuccessful examples.}
+Figure~\ref{fig:backend-failures} shows paired outputs selected from three
+outcome categories rather than only displaying favourable examples. Green
+rectangles are Cornell positive annotations, yellow is the VLM localisation,
+blue is the seed-46 CNN prediction, and red is the geometric prediction. The
+CNN-only cases illustrate situations where learned centre and size estimates
+overcome the fixed geometric size rule. Geometry-only cases show that the
+perpendicular-to-long-axis prior can supply a better orientation. The shared
+failures identify cases in which a common crop does not guarantee a valid
+grasp estimate.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{images/backend_failure_cases.png}
+  \caption{Representative paired failures on the fixed test subset: CNN-only
+  successes, geometry-only successes, and failures shared by both backends.
+  Samples were selected by outcome category to expose complementarity and
+  common limitations, not to estimate category frequency visually.}
+  \label{fig:backend-failures}
+\end{figure}
 
 \section{Comparative Analysis}
-\todo{Compare baseline and VLM-assisted methods. Highlight where the VLM-assisted pipeline improves, matches, or underperforms the baseline.}
+The whole-dataset comparison supports a strong but bounded conclusion:
+constraining the existing colour/contour estimator with open-vocabulary
+localisation is more effective than applying it to the whole image. This is
+supported by success rate, IoU, angle error, and elimination of missing-contour
+predictions. It does not isolate whether Grounding DINO is superior to every
+possible conventional detector.
 
-\section{Ablation and Optional Adaptation Results}
-\todo{Report ablation results and optional few-shot or lightweight adaptation results if conducted. Delete this section if not used.}
+The paired test analysis further divides the 85 images into 52 cases where both
+backends succeed, 16 where only the CNN succeeds, 12 where only geometry
+succeeds, and five where both fail. Thus, neither local backend strictly
+dominates the other: 28 images produce a discordant binary outcome. The CNN's
+higher IoU and the geometric backend's lower angle error are consistent with
+this complementarity. A future hybrid could retain the geometric orientation
+prior while learning centre and scale, but that hypothesis is not tested in the
+current results.
+
+The test subset scores must be interpreted alongside the split audit. Because
+even the traditional baseline performs much better on directories 09--10 than
+on directories 01--06, the CNN's higher fixed-test result is not evidence that
+unseen objects are generally easier or that the model has achieved broad
+object-level generalisation. The defensible finding is narrower: on these same
+85 images and this evaluation implementation, the saved CNN run succeeds four
+times more often than the geometric backend.
 
 %==============================================================================
 \chapter{General Discussion}

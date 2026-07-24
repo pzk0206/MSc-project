@@ -101,6 +101,7 @@
 | `docs/reporting/supervisor_progress_report_speaking_notes_concise_bilingual.pdf` | 适合 iPad 竖屏阅读的简洁双语讲稿 |
 | `uog_dissertation_outline/l4proj.tex` | 毕业论文主 LaTeX 文档 |
 | `uog_dissertation_outline/l4proj.bib` | 毕业论文 BibTeX 文献库 |
+| `uog_dissertation_outline/l4proj.cls` | 毕业论文模板与当前 LaTeX 兼容设置 |
 | `uog_dissertation_outline/images/cnn_architecture.pdf` | 轻量 CNN 的矢量结构图 |
 
 ## 数据流
@@ -161,6 +162,12 @@ conda run -n msc-grasp python src/vlm/analyze_backend_comparison.py
 # 重新生成 CNN 矢量结构图
 MPLCONFIGDIR=/tmp/msc-mplconfig conda run -n msc-grasp \
   python docs/reporting/generate_cnn_architecture.py
+
+# 编译毕业论文（首次使用会下载标准 LaTeX 宏包缓存）
+cd uog_dissertation_outline
+XDG_CACHE_HOME=/tmp/msc-tectonic-cache conda run -n msc-grasp \
+  tectonic --keep-logs l4proj.tex
+cd ..
 ```
 
 依赖安装和 VLM 环境说明见 [`../../src/vlm/INSTALL.md`](../../src/vlm/INSTALL.md)。
