@@ -10,6 +10,7 @@
 │   ├── shared/
 │   │   ├── cornell_dataset.py
 │   │   ├── grasp_geometry.py
+│   │   ├── analyze_cornell_splits.py
 │   │   ├── check_cornell_dataset.py
 │   │   ├── export_cornell_grasp_labels.py
 │   │   ├── inspect_sample.py
@@ -69,6 +70,7 @@
 |---|---|
 | `src/shared/cornell_dataset.py` | 解析 Cornell 样本、图像和抓取标注 |
 | `src/shared/grasp_geometry.py` | 抓取矩形几何转换、IoU 和角度评估 |
+| `src/shared/analyze_cornell_splits.py` | 审计 Cornell 固定目录划分、共同测试样本和代表图 |
 | `src/shared/check_cornell_dataset.py` | 检查数据集完整性 |
 | `src/shared/export_cornell_grasp_labels.py` | 导出中心参数形式的抓取标签 |
 | `src/shared/inspect_sample.py` | 检查单个 Cornell 样本 |
@@ -140,6 +142,9 @@ conda run -n msc-grasp python src/vlm/run_cnn_grasp.py --mode multi --num-runs 5
 
 # 失败案例分析
 python3 src/vlm/analyze_failures.py
+
+# Cornell 数据划分审计
+conda run -n msc-grasp python src/shared/analyze_cornell_splits.py
 ```
 
 依赖安装和 VLM 环境说明见 [`../../src/vlm/INSTALL.md`](../../src/vlm/INSTALL.md)。
@@ -165,6 +170,12 @@ data/processed/vlm/cnn_grasp/
 ├── cnn_grasp_summary.json
 ├── cnn_grasp_model.pt
 └── training_history.json
+
+data/processed/shared/split_audit/
+├── representative_samples.csv
+├── split_metrics.json
+├── same_test_subset_metrics.csv
+└── cornell_split_contact_sheet.png
 ```
 
 ## 文档阅读顺序
