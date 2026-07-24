@@ -25,6 +25,7 @@
 │       ├── run_vlm_assisted_grasp.py
 │       ├── run_cnn_grasp.py
 │       ├── analyze_failures.py
+│       ├── analyze_backend_comparison.py
 │       ├── INSTALL.md
 │       └── README.md
 ├── docs/
@@ -83,6 +84,7 @@
 | `src/vlm/run_vlm_assisted_grasp.py` | 运行 VLM 定位 + 几何抓取后端 |
 | `src/vlm/run_cnn_grasp.py` | 训练、评估并重复运行 CNN 抓取后端 |
 | `src/vlm/analyze_failures.py` | 汇总 VLM 引导的几何实验流程失败案例 |
+| `src/vlm/analyze_backend_comparison.py` | 在固定测试子集上逐样本比较几何和 CNN 后端 |
 | `docs/reporting/generate_supervisor_progress_report.py` | 生成三页中文导师项目进展汇报 PDF |
 | `docs/reporting/generate_supervisor_progress_report_en.py` | 生成三页英文导师项目进展汇报 PDF |
 | `docs/reporting/generate_concise_speaking_notes_pdf.py` | 将简洁双语讲稿转换为适合 iPad 阅读的 PDF |
@@ -145,6 +147,9 @@ python3 src/vlm/analyze_failures.py
 
 # Cornell 数据划分审计
 conda run -n msc-grasp python src/shared/analyze_cornell_splits.py
+
+# 固定测试子集后端比较
+conda run -n msc-grasp python src/vlm/analyze_backend_comparison.py
 ```
 
 依赖安装和 VLM 环境说明见 [`../../src/vlm/INSTALL.md`](../../src/vlm/INSTALL.md)。
@@ -176,6 +181,11 @@ data/processed/shared/split_audit/
 ├── split_metrics.json
 ├── same_test_subset_metrics.csv
 └── cornell_split_contact_sheet.png
+
+data/processed/vlm/backend_comparison/
+├── sample_comparison.csv
+├── comparison_summary.json
+└── backend_failure_cases.png
 ```
 
 ## 文档阅读顺序
