@@ -2,6 +2,27 @@
 
 本文是回顾已完成项目工作的入口。详细内容保留在按日期命名的周报中。
 
+## 2026-07-26 — Cornell image-wise 五折实现与训练前审计
+
+- 设计并实现确定性的 image-wise 五折 manifest；seed 42 下每折固定为
+  566/142/177，五个测试 fold 两两互斥并覆盖全部 885 张图。
+- 新增 manifest CSV/JSON 稳定持久化、SHA-256、角色重叠、样本遗漏和
+  非完整测试覆盖检查；正式 JSON 哈希为
+  `b7d3e22a145f50add6d57a70bf0abb87b4b12ee674541deab0d7fee9a286bc2d`。
+- 将 CNN crop 构建与数据角色划分解耦，保留旧固定目录入口，同时支持由
+  manifest 按 sample ID 显式划分。
+- 修复 `evaluate_model` 忽略传入样本集合的问题；用历史 seed 42 权重确认
+  旧测试集合严格只输出 85 条结果。
+- 实现逐 fold 独立模型、历史、预测和 summary 路径，以及五折完整性审计、
+  pooled/fold 统计、单头与多头共同 manifest 校验和成对比较。
+- 实现可恢复 CLI：可单独生成 manifest、运行任意 fold、从保存产物聚合或
+  比较架构；修复直接执行脚本时的项目根路径导入问题。
+- 完整测试为 32 passed；Python 编译与 diff 检查通过。
+- CPU 冒烟以及 GTX 1650 Ti 上的单头/多头 CUDA 冒烟均完成；严格确定性
+  已启用。冒烟产物写入 `/tmp`，未作为正式实验结果记录。
+- Object-wise 仍因缺少 885 图到物体实例的权威映射而阻塞；`01`–`10`
+  不作为 object ID。尚未运行十次正式 image-wise fold 训练。
+
 ## 2026-07-24 — 实验溯源与数据划分审计
 
 - 修复 CNN 多轮汇总错误记录验证损失的问题，并移除重复 CLI 入口。

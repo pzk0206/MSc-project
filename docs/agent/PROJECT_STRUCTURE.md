@@ -9,6 +9,7 @@
 ├── src/
 │   ├── shared/
 │   │   ├── cornell_dataset.py
+│   │   ├── cornell_cross_validation.py
 │   │   ├── grasp_geometry.py
 │   │   ├── analyze_cornell_splits.py
 │   │   ├── check_cornell_dataset.py
@@ -25,6 +26,7 @@
 │       ├── run_vlm_assisted_grasp.py
 │       ├── cnn_grasp_models.py
 │       ├── run_cnn_grasp.py
+│       ├── run_cnn_cross_validation.py
 │       ├── analyze_failures.py
 │       ├── analyze_backend_comparison.py
 │       ├── INSTALL.md
@@ -74,6 +76,7 @@
 | 路径 | 职责 |
 |---|---|
 | `src/shared/cornell_dataset.py` | 解析 Cornell 样本、图像和抓取标注 |
+| `src/shared/cornell_cross_validation.py` | 生成、持久化并审计确定性的 Cornell image-wise fold manifest |
 | `src/shared/grasp_geometry.py` | 抓取矩形几何转换、IoU 和角度评估 |
 | `src/shared/analyze_cornell_splits.py` | 审计 Cornell 固定目录划分、共同测试样本和代表图 |
 | `src/shared/check_cornell_dataset.py` | 检查数据集完整性 |
@@ -88,6 +91,7 @@
 | `src/vlm/run_vlm_assisted_grasp.py` | 运行 VLM 定位 + 几何抓取后端 |
 | `src/vlm/cnn_grasp_models.py` | 定义旧权重兼容的单头 CNN、多头 CNN 及多头损失 |
 | `src/vlm/run_cnn_grasp.py` | 训练、评估并重复运行单头或多头 CNN 抓取后端 |
+| `src/vlm/run_cnn_cross_validation.py` | 运行可恢复的单头/多头 image-wise 五折训练、聚合与成对比较 |
 | `src/vlm/analyze_failures.py` | 汇总 VLM 引导的几何实验流程失败案例 |
 | `src/vlm/analyze_backend_comparison.py` | 在固定测试子集上逐样本比较几何和 CNN 后端 |
 | `docs/planning/cnn_architecture_rationale.md` | 逐项区分当前 CNN 的文献依据与工程选择 |
@@ -119,7 +123,8 @@ data/raw/cornell/
                                              │      └── data/processed/vlm/grasp/
                                              └── CNN 抓取
                                                     ├── data/processed/vlm/cnn_grasp/
-                                                    └── data/processed/vlm/cnn_grasp_multi_head/
+                                                    ├── data/processed/vlm/cnn_grasp_multi_head/
+                                                    └── data/processed/vlm/cnn_cross_validation/
 ```
 
 `data/` 被 `.gitignore` 排除。源码和文档不得依赖已提交的生成结果。
@@ -157,6 +162,20 @@ conda run -n msc-grasp python src/vlm/run_cnn_grasp.py --mode multi --num-runs 5
 conda run -n msc-grasp python src/vlm/run_cnn_grasp.py --mode all \
   --architecture multi_head \
   --output-dir data/processed/vlm/cnn_grasp_multi_head --device cuda
+
+# 生成并审计共同的 image-wise 五折清单
+conda run -n msc-grasp python src/vlm/run_cnn_cross_validation.py \
+  --mode manifest
+
+# 运行一个可恢复的单头 fold
+conda run -n msc-grasp python src/vlm/run_cnn_cross_validation.py \
+  --mode run --architecture single --fold 0 --device cuda
+
+# 五折完成后聚合并比较架构
+conda run -n msc-grasp python src/vlm/run_cnn_cross_validation.py \
+  --mode aggregate --architecture single
+conda run -n msc-grasp python src/vlm/run_cnn_cross_validation.py \
+  --mode compare
 
 # 失败案例分析
 python3 src/vlm/analyze_failures.py
@@ -201,6 +220,19 @@ data/processed/vlm/cnn_grasp/
 ├── cnn_grasp_summary.json
 ├── cnn_grasp_model.pt
 └── training_history.json
+
+data/processed/vlm/cnn_cross_validation/
+├── image_wise_folds_seed_42.csv
+├── image_wise_folds_seed_42.json
+├── single/
+│   ├── fold_0/ ... fold_4/
+│   ├── combined_predictions.csv
+│   └── cross_validation_summary.json
+├── multi_head/
+│   ├── fold_0/ ... fold_4/
+│   ├── combined_predictions.csv
+│   └── cross_validation_summary.json
+└── architecture_comparison.json
 
 data/processed/shared/split_audit/
 ├── representative_samples.csv
