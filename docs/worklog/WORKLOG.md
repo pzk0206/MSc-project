@@ -27,6 +27,9 @@
   647/885（73.11%）、IoU 0.4580、角度 17.40°。
 - 独立复核两个架构各 885 个唯一 ID、每折 177 行、共同 manifest 哈希、
   最佳验证损失与历史最小值以及所有数值有限性，全部通过。
+- 整理论文写作结构与字数指南，明确 Abstract、Introduction、Literature
+  Review、Methodology、Findings 和 Conclusion 的内容重点、批判性分析要求
+  与推荐写作顺序。
 
 ## 2026-07-24 — 实验溯源与数据划分审计
 

@@ -36,6 +36,7 @@
 │   │   ├── CURRENT_STATUS.md
 │   │   ├── PROJECT_OVERVIEW.md
 │   │   ├── PROJECT_STRUCTURE.md
+│   │   ├── DISSERTATION_WRITING_GUIDE.md
 │   │   └── CODE_ORGANIZATION.md
 │   ├── debugging/
 │   │   ├── BUGLOG.md
@@ -96,6 +97,7 @@
 | `src/vlm/analyze_backend_comparison.py` | 在固定测试子集上逐样本比较几何和 CNN 后端 |
 | `docs/planning/cnn_architecture_rationale.md` | 逐项区分当前 CNN 的文献依据与工程选择 |
 | `docs/planning/modern_2d_grasp_literature_matrix.md` | 统一比较现代二维抓取方法的输入、划分、指标和可比性 |
+| `docs/agent/DISSERTATION_WRITING_GUIDE.md` | 记录论文各章节目标字数、核心内容、批判性分析要求和推荐写作顺序 |
 | `docs/reporting/generate_cnn_architecture.py` | 生成论文使用的 CNN 矢量结构图 |
 | `docs/reporting/generate_supervisor_progress_report.py` | 生成三页中文导师项目进展汇报 PDF |
 | `docs/reporting/generate_supervisor_progress_report_en.py` | 生成三页英文导师项目进展汇报 PDF |
@@ -252,6 +254,7 @@ data/processed/vlm/backend_comparison/
 2. [项目概览](PROJECT_OVERVIEW.md) — 稳定的研究背景和方法。
 3. [项目结构](PROJECT_STRUCTURE.md) — 当前目录、模块和命令。
 4. [代码组织规范](CODE_ORGANIZATION.md) — 新代码放置和模块拆分规则。
-5. [项目工作日志](../worklog/WORKLOG.md) — 按时间回顾已完成工作。
+5. [论文写作指南](DISSERTATION_WRITING_GUIDE.md) — 章节字数、内容重点和写作顺序。
+6. [项目工作日志](../worklog/WORKLOG.md) — 按时间回顾已完成工作。
 
 新增、移动或删除主要模块后必须更新本文件。
