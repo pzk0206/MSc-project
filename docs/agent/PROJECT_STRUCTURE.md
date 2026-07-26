@@ -20,17 +20,31 @@
 │   │   ├── run_cv_baseline.py
 │   │   ├── visualize_mask_pipeline.py
 │   │   └── visualize_mask_pipeline_batch.py
-│   └── vlm/
-│       ├── prompts.py
-│       ├── run_grounding_dino_localization.py
-│       ├── run_vlm_assisted_grasp.py
-│       ├── cnn_grasp_models.py
-│       ├── run_cnn_grasp.py
-│       ├── run_cnn_cross_validation.py
-│       ├── analyze_failures.py
-│       ├── analyze_backend_comparison.py
-│       ├── INSTALL.md
-│       └── README.md
+│   ├── vlm/
+│   │   ├── prompts.py
+│   │   ├── run_grounding_dino_localization.py
+│   │   ├── run_vlm_assisted_grasp.py
+│   │   ├── cnn_grasp_models.py
+│   │   ├── run_cnn_grasp.py
+│   │   ├── run_cnn_cross_validation.py
+│   │   ├── analyze_failures.py
+│   │   ├── analyze_backend_comparison.py
+│   │   ├── INSTALL.md
+│   │   └── README.md
+│   └── simulation/
+│       └── pybullet/
+│           ├── scene.py
+│           ├── camera.py
+│           ├── perception.py
+│           ├── visualization.py
+│           └── run_pilot.py
+├── tests/
+│   └── simulation/
+│       ├── test_pybullet_camera.py
+│       ├── test_pybullet_perception.py
+│       ├── test_pybullet_smoke.py
+│       ├── test_pybullet_visualization.py
+│       └── test_pybullet_runner.py
 ├── docs/
 │   ├── agent/
 │   │   ├── CURRENT_STATUS.md
@@ -95,6 +109,11 @@
 | `src/vlm/run_cnn_cross_validation.py` | 运行可恢复的单头/多头 image-wise 五折训练、聚合与成对比较 |
 | `src/vlm/analyze_failures.py` | 汇总 VLM 引导的几何实验流程失败案例 |
 | `src/vlm/analyze_backend_comparison.py` | 在固定测试子集上逐样本比较几何和 CNN 后端 |
+| `src/simulation/pybullet/scene.py` | 管理确定性 PyBullet 场景、URDF 和 client 生命周期 |
+| `src/simulation/pybullet/camera.py` | 采集 RGB、米制深度、segmentation 和相机矩阵 |
+| `src/simulation/pybullet/perception.py` | 将仿真 RGB 适配到现有 Grounding DINO、几何和 CNN 接口 |
+| `src/simulation/pybullet/visualization.py` | 绘制定位框、二维抓取框和深度/分割诊断图 |
+| `src/simulation/pybullet/run_pilot.py` | 编排第一阶段仿真感知 pilot、CLI、产物和失败元数据 |
 | `docs/planning/cnn_architecture_rationale.md` | 逐项区分当前 CNN 的文献依据与工程选择 |
 | `docs/planning/modern_2d_grasp_literature_matrix.md` | 统一比较现代二维抓取方法的输入、划分、指标和可比性 |
 | `docs/agent/DISSERTATION_WRITING_GUIDE.md` | 记录论文各章节目标字数、核心内容、批判性分析要求和推荐写作顺序 |
@@ -127,6 +146,12 @@ data/raw/cornell/
                                                     ├── data/processed/vlm/cnn_grasp/
                                                     ├── data/processed/vlm/cnn_grasp_multi_head/
                                                     └── data/processed/vlm/cnn_cross_validation/
+
+PyBullet 场景
+        └── 固定虚拟相机 ───────────────> RGB / depth / segmentation
+                                             │
+                                             └── 现有 VLM + 抓取后端
+                                                    └── data/processed/pybullet/
 ```
 
 `data/` 被 `.gitignore` 排除。源码和文档不得依赖已提交的生成结果。
@@ -188,6 +213,13 @@ conda run -n msc-grasp python src/shared/analyze_cornell_splits.py
 # 固定测试子集后端比较
 conda run -n msc-grasp python src/vlm/analyze_backend_comparison.py
 
+# PyBullet DIRECT 感知 pilot（小鸭目标诊断）
+conda run -n msc-grasp python src/simulation/pybullet/run_pilot.py \
+  --backend geometry --device cuda --prompt "yellow rubber duck"
+
+# 运行全部测试；使用 python -m pytest 保证仓库根目录可导入
+conda run -n msc-grasp python -m pytest -q
+
 # 重新生成 CNN 矢量结构图
 MPLCONFIGDIR=/tmp/msc-mplconfig conda run -n msc-grasp \
   python docs/reporting/generate_cnn_architecture.py
@@ -246,6 +278,15 @@ data/processed/vlm/backend_comparison/
 ├── sample_comparison.csv
 ├── comparison_summary.json
 └── backend_failure_cases.png
+
+data/processed/pybullet/pilot/
+├── rgb.png
+├── depth.npy
+├── depth_visualization.png
+├── segmentation.png
+├── localization.png
+├── prediction.png
+└── metadata.json
 ```
 
 ## 文档阅读顺序

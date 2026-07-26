@@ -1,4 +1,4 @@
-# Cornell 数据集解析与传统计算机视觉基线调试记录
+# 项目调试记录
 
 > 本文件保留完整调试历史。当前状态见
 > [`../agent/CURRENT_STATUS.md`](../agent/CURRENT_STATUS.md)，失败模式汇总见
@@ -888,3 +888,42 @@ epoch 的损失只相差约 `2e-5`，但早停后的固定测试成功率从 82.
 在 GTX 1650 Ti 上用相同 seed 连续运行两次三轮小型训练，训练历史完全相同，
 所有模型权重逐位一致。修复前生成的单头重跑和中断多头批次保留为诊断证据，
 不进入最终单头/多头公平对照。
+
+## 19. PyBullet 环境、测试入口与 prompt 歧义
+
+日期：2026-07-27
+
+### 19.1 `conda run pytest` 无法导入 `src`
+
+直接运行 `conda run -n msc-grasp pytest -q` 时，pytest 可执行入口的
+`sys.path` 不包含仓库根目录，测试收集阶段报
+`ModuleNotFoundError: No module named 'src'`。同一环境使用：
+
+```bash
+conda run -n msc-grasp python -m pytest -q
+```
+
+可正确发现仓库并通过原有 32 项测试。该问题属于命令入口差异，不是源码回归；
+项目文档统一使用 `python -m pytest`。
+
+### 19.2 沙箱内外 CUDA 结果不同
+
+受限沙箱内同一 `msc-grasp` 环境返回
+`torch.cuda.is_available() == False`。在沙箱外运行相同 Conda 命令返回
+`True`，并识别 `NVIDIA GeForce GTX 1650 Ti`。因此沙箱内的 `False` 不能
+解释为驱动、CUDA 或 PyTorch 安装失败；真实 GPU 实验必须在允许访问
+`/dev/dxg` 的环境运行。
+
+### 19.3 generic prompt 选错机器人部件
+
+PyBullet 默认场景同时包含 Panda 和黄色小鸭。使用 Cornell 主实验的 generic
+prompt `small object` 时，Grounding DINO 返回 box
+`[323, 68, 450, 150]`、score `0.5985`。人工检查定位图确认该框覆盖 Panda
+末端，而非小鸭；runner 的 `status=success` 只表示管线产生合法输出，不代表
+语义目标正确。
+
+保持场景、模型、阈值和后端不变，仅将 prompt 改为
+`yellow rubber duck` 后，box 为 `[318, 208, 374, 273]`、score `0.6985`，
+人工检查确认覆盖小鸭。根因是多物体机器人场景中的 prompt 歧义，而不是颜色
+通道、相机坐标或绘图错误。后续默认配置应使 prompt 与默认 URDF 配对，同时
+保留其他物体和多物体目标的显式 prompt 选择能力。

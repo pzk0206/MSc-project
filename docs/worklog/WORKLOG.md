@@ -2,6 +2,26 @@
 
 本文是回顾已完成项目工作的入口。详细内容保留在按日期命名的周报中。
 
+## 2026-07-27 — PyBullet 虚拟相机感知 pilot 与失败诊断
+
+- 安装 PyBullet `3.2.7`（API `202010061`）到 `msc-grasp` Conda 环境。
+- 在 `src/simulation/pybullet/` 实现场景生命周期、固定虚拟相机、米制深度
+  转换、现有 Grounding DINO/几何/CNN 后端适配、OpenCV 绘图、CLI 和失败
+  元数据；第一阶段不包含机器人运动或物理抓取。
+- 使用测试驱动开发新增 24 项 simulation 测试；完整回归为 `56 passed`，
+  `git diff --check` 通过。
+- 验证 DIRECT + `ER_TINY_RENDERER` 生成 640×480 RGB、深度和 segmentation，
+  且小鸭在 segmentation 中可见。
+- 确认沙箱内无法访问 CUDA，但沙箱外同一环境可识别 GTX 1650 Ti 并成功运行
+  Grounding DINO。
+- 真实运行发现 `small object` 错误定位 Panda 末端；只改变 prompt 为
+  `yellow rubber duck` 后正确定位小鸭，并生成合法几何抓取框。
+- 明确该结果是系统集成与 prompt 歧义的单案例可行性证据，不是仿真抓取成功率，
+  metadata 保持 `physical_grasp_executed: false`。
+- 设计与实施计划分别保存于 `docs/superpowers/specs/` 和
+  `docs/superpowers/plans/`；实现检查点提交为 `adc2c84`、`ba250fd`、
+  `c49ad30`、`1e68f8a` 和 `4ce9762`。
+
 ## 2026-07-26 — 完整中文论文初稿与最终验证
 
 - 按 `docs/agent/DISSERTATION_WRITING_GUIDE.md` 将英文 LaTeX 工作稿结构性
