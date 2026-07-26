@@ -23,6 +23,7 @@
 │       ├── prompts.py
 │       ├── run_grounding_dino_localization.py
 │       ├── run_vlm_assisted_grasp.py
+│       ├── cnn_grasp_models.py
 │       ├── run_cnn_grasp.py
 │       ├── analyze_failures.py
 │       ├── analyze_backend_comparison.py
@@ -85,7 +86,8 @@
 | `src/vlm/prompts.py` | 保存 VLM 定位提示词配置 |
 | `src/vlm/run_grounding_dino_localization.py` | 运行 Grounding DINO 开放词汇定位 |
 | `src/vlm/run_vlm_assisted_grasp.py` | 运行 VLM 定位 + 几何抓取后端 |
-| `src/vlm/run_cnn_grasp.py` | 训练、评估并重复运行 CNN 抓取后端 |
+| `src/vlm/cnn_grasp_models.py` | 定义旧权重兼容的单头 CNN、多头 CNN 及多头损失 |
+| `src/vlm/run_cnn_grasp.py` | 训练、评估并重复运行单头或多头 CNN 抓取后端 |
 | `src/vlm/analyze_failures.py` | 汇总 VLM 引导的几何实验流程失败案例 |
 | `src/vlm/analyze_backend_comparison.py` | 在固定测试子集上逐样本比较几何和 CNN 后端 |
 | `docs/planning/cnn_architecture_rationale.md` | 逐项区分当前 CNN 的文献依据与工程选择 |
@@ -116,7 +118,8 @@ data/raw/cornell/
                                              ├── 几何抓取
                                              │      └── data/processed/vlm/grasp/
                                              └── CNN 抓取
-                                                    └── data/processed/vlm/cnn_grasp/
+                                                    ├── data/processed/vlm/cnn_grasp/
+                                                    └── data/processed/vlm/cnn_grasp_multi_head/
 ```
 
 `data/` 被 `.gitignore` 排除。源码和文档不得依赖已提交的生成结果。
@@ -149,6 +152,11 @@ conda run -n msc-grasp python src/vlm/run_cnn_grasp.py --mode all --device cuda
 
 # 五次重复 CNN 实验
 conda run -n msc-grasp python src/vlm/run_cnn_grasp.py --mode multi --num-runs 5 --device cuda
+
+# 训练并评估多头 CNN
+conda run -n msc-grasp python src/vlm/run_cnn_grasp.py --mode all \
+  --architecture multi_head \
+  --output-dir data/processed/vlm/cnn_grasp_multi_head --device cuda
 
 # 失败案例分析
 python3 src/vlm/analyze_failures.py

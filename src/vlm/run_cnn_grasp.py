@@ -34,6 +34,7 @@ import json
 import math
 import shutil
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import cv2
@@ -52,6 +53,11 @@ from src.baseline_cv.run_cv_baseline import (  # noqa: E402
 )
 from src.shared.cornell_dataset import CornellGraspDataset  # noqa: E402
 from src.shared.grasp_geometry import normalize_angle_radians, rectangles_to_center_format  # noqa: E402
+from src.vlm.cnn_grasp_models import (  # noqa: E402
+    MultiHeadCNNGraspRegressor,
+    SingleHeadCNNGraspRegressor,
+    compute_multi_head_loss,
+)
 
 # ——— 路径常量 ———
 DATASET_ROOT = Path("data/raw/cornell")
@@ -64,6 +70,52 @@ PREDICTIONS_CSV = OUTPUT_DIR / "cnn_grasp_predictions.csv"
 SUMMARY_JSON = OUTPUT_DIR / "cnn_grasp_summary.json"
 TRAIN_HISTORY_JSON = OUTPUT_DIR / "training_history.json"
 VISUALIZATION_DIR = OUTPUT_DIR / "visualizations"
+
+
+@dataclass(frozen=True)
+class OutputPaths:
+    output_dir: Path
+    model_weights: Path
+    predictions_csv: Path
+    summary_json: Path
+    training_history_json: Path
+    visualization_dir: Path
+
+
+def build_output_paths(output_dir: Path) -> OutputPaths:
+    """Build all generated artifact paths from one CLI-controlled directory."""
+    return OutputPaths(
+        output_dir=output_dir,
+        model_weights=output_dir / "cnn_grasp_model.pt",
+        predictions_csv=output_dir / "cnn_grasp_predictions.csv",
+        summary_json=output_dir / "cnn_grasp_summary.json",
+        training_history_json=output_dir / "training_history.json",
+        visualization_dir=output_dir / "visualizations",
+    )
+
+
+def resolve_output_dir(architecture: str, output_dir: Path | None) -> Path:
+    """Choose an architecture-safe default without overriding an explicit path."""
+    if output_dir is not None:
+        return output_dir
+    if architecture == "multi_head":
+        return Path("data/processed/vlm/cnn_grasp_multi_head")
+    return Path("data/processed/vlm/cnn_grasp")
+
+
+def configure_output_paths(output_dir: Path) -> OutputPaths:
+    """Configure legacy module globals while keeping path construction testable."""
+    global OUTPUT_DIR, MODEL_WEIGHTS, PREDICTIONS_CSV
+    global SUMMARY_JSON, TRAIN_HISTORY_JSON, VISUALIZATION_DIR
+
+    paths = build_output_paths(output_dir)
+    OUTPUT_DIR = paths.output_dir
+    MODEL_WEIGHTS = paths.model_weights
+    PREDICTIONS_CSV = paths.predictions_csv
+    SUMMARY_JSON = paths.summary_json
+    TRAIN_HISTORY_JSON = paths.training_history_json
+    VISUALIZATION_DIR = paths.visualization_dir
+    return paths
 
 # ——— 训练超参数 ———
 CROP_SIZE = 224          # VLM crop resize 到的正方形尺寸
@@ -269,78 +321,41 @@ def build_datasets():
     return train, val, test
 
 
-# ======================================================================
-# CNN 模型定义
-# ======================================================================
+# Backward-compatible name used by existing analysis commands.
+CNNGraspRegressor = SingleHeadCNNGraspRegressor
 
-class CNNGraspRegressor:
-    """
-    轻量 CNN 抓取参数回归网络。
 
-    输入:  (B, 3, 224, 224) 归一化 RGB
-    输出:  (B, 6) = [cx, cy, width, height, sin(2θ), cos(2θ)]
-    """
+def create_model(architecture: str):
+    if architecture == "single":
+        return SingleHeadCNNGraspRegressor()
+    if architecture == "multi_head":
+        return MultiHeadCNNGraspRegressor()
+    raise ValueError(f"unsupported architecture: {architecture}")
 
-    def __init__(self):
-        import torch
-        import torch.nn as nn
 
-        self.model = nn.Sequential(
-            # Block 1: 224 -> 112
-            nn.Conv2d(3, 32, kernel_size=5, stride=2, padding=2),
-            nn.BatchNorm2d(32),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2),  # 112 -> 56
+def flatten_model_output(output):
+    """Convert either architecture output to the established six-value order."""
+    import torch
 
-            # Block 2: 56 -> 28
-            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2),  # 56 -> 28
-
-            # Block 3: 28 -> 14
-            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2),  # 28 -> 14
-
-            # Block 4: 14 -> 7
-            nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2),  # 14 -> 7
-
-            # 全局平均池化 -> (B, 256)
-            nn.AdaptiveAvgPool2d(1),
-            nn.Flatten(),
-
-            # 全连接
-            nn.Linear(256, 128),
-            nn.ReLU(inplace=True),
-            nn.Dropout(0.3),
-            nn.Linear(128, 64),
-            nn.ReLU(inplace=True),
-            nn.Dropout(0.2),
-            nn.Linear(64, 6),
+    if isinstance(output, dict):
+        return torch.cat(
+            [output["centre"], output["size"], output["orientation"]],
+            dim=1,
         )
+    return output
 
-    def to(self, device):
-        self.model = self.model.to(device)
-        return self
 
-    def train(self):
-        self.model.train()
-        return self
+def _state_dict_for_save(model, architecture: str) -> dict:
+    if architecture == "single":
+        return model.model.state_dict()
+    return model.state_dict()
 
-    def eval(self):
-        self.model.eval()
-        return self
 
-    def parameters(self):
-        return self.model.parameters()
-
-    def __call__(self, x):
-        return self.model(x)
+def _load_state_dict(model, architecture: str, state_dict: dict) -> None:
+    if architecture == "single":
+        model.model.load_state_dict(state_dict)
+    else:
+        model.load_state_dict(state_dict)
 
 
 # ======================================================================
@@ -352,7 +367,10 @@ def train_model(
     val_data: list[dict],
     device: str = "cuda",
     seed: int = 42,
-) -> tuple[CNNGraspRegressor, list[dict]]:
+    architecture: str = "single",
+    model_weights_path: Path | None = None,
+    history_path: Path | None = None,
+) -> tuple[object, list[dict]]:
     """训练 CNN 抓取回归网络。"""
     import torch
     import torch.nn as nn
@@ -387,14 +405,31 @@ def train_model(
         GraspCropDataset(val_data), batch_size=BATCH_SIZE, shuffle=False,
     )
 
-    model = CNNGraspRegressor().to(device)
+    model = create_model(architecture).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode="min", factor=0.5, patience=8, verbose=True,
+        optimizer, mode="min", factor=0.5, patience=8,
     )
 
     # 损失: Smooth L1 — 对离群值不敏感
     criterion = nn.SmoothL1Loss()
+
+    def calculate_losses(prediction, target):
+        if architecture == "multi_head":
+            return compute_multi_head_loss(prediction, target)
+        total = criterion(prediction, target)
+        return {"total": total}
+
+    def empty_totals() -> dict[str, float]:
+        names = (
+            ("total", "centre", "size", "orientation", "unit_norm")
+            if architecture == "multi_head"
+            else ("total",)
+        )
+        return {name: 0.0 for name in names}
+
+    def mean_totals(totals: dict[str, float], count: int) -> dict[str, float]:
+        return {name: value / count for name, value in totals.items()}
 
     history = []
     best_val_loss = float("inf")
@@ -405,37 +440,52 @@ def train_model(
     for epoch in range(1, NUM_EPOCHS + 1):
         # ——— 训练 ———
         model.train()
-        train_loss = 0.0
+        train_totals = empty_totals()
         for batch_x, batch_y in train_loader:
             batch_x, batch_y = batch_x.to(device), batch_y.to(device)
             optimizer.zero_grad()
             pred = model(batch_x)
-            loss = criterion(pred, batch_y)
-            loss.backward()
+            losses = calculate_losses(pred, batch_y)
+            losses["total"].backward()
             optimizer.step()
-            train_loss += loss.item() * batch_x.size(0)
+            for name, loss in losses.items():
+                train_totals[name] += loss.item() * batch_x.size(0)
 
-        train_loss /= len(train_data)
+        train_means = mean_totals(train_totals, len(train_data))
+        train_loss = train_means["total"]
 
         # ——— 验证 ———
         model.eval()
-        val_loss = 0.0
+        val_totals = empty_totals()
         with torch.no_grad():
             for batch_x, batch_y in val_loader:
                 batch_x, batch_y = batch_x.to(device), batch_y.to(device)
                 pred = model(batch_x)
-                val_loss += criterion(pred, batch_y).item() * batch_x.size(0)
-        val_loss /= len(val_data)
+                losses = calculate_losses(pred, batch_y)
+                for name, loss in losses.items():
+                    val_totals[name] += loss.item() * batch_x.size(0)
+        val_means = mean_totals(val_totals, len(val_data))
+        val_loss = val_means["total"]
 
         scheduler.step(val_loss)
 
-        history.append({
+        epoch_record = {
             "epoch": epoch, "train_loss": float(train_loss), "val_loss": float(val_loss),
-        })
+        }
+        if architecture == "multi_head":
+            for name in ("centre", "size", "orientation", "unit_norm"):
+                epoch_record[f"train_{name}_loss"] = float(train_means[name])
+                epoch_record[f"val_{name}_loss"] = float(val_means[name])
+        history.append(epoch_record)
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            best_state = {k: v.cpu().clone() for k, v in model.model.state_dict().items()}
+            best_state = {
+                key: value.cpu().clone()
+                for key, value in _state_dict_for_save(
+                    model, architecture
+                ).items()
+            }
             patience_counter = 0
         else:
             patience_counter += 1
@@ -449,15 +499,18 @@ def train_model(
 
     # 恢复最佳权重
     if best_state is not None:
-        model.model.load_state_dict(best_state)
+        _load_state_dict(model, architecture, best_state)
 
     # 保存模型
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    torch.save(model.model.state_dict(), MODEL_WEIGHTS)
-    print(f"模型已保存: {MODEL_WEIGHTS}")
+    selected_model_path = model_weights_path or MODEL_WEIGHTS
+    selected_history_path = history_path or TRAIN_HISTORY_JSON
+    selected_model_path.parent.mkdir(parents=True, exist_ok=True)
+    selected_history_path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(_state_dict_for_save(model, architecture), selected_model_path)
+    print(f"模型已保存: {selected_model_path}")
 
     # 保存训练历史
-    with open(TRAIN_HISTORY_JSON, "w", encoding="utf-8") as f:
+    with open(selected_history_path, "w", encoding="utf-8") as f:
         json.dump(history, f, indent=2)
 
     return model, history
@@ -468,7 +521,7 @@ def train_model(
 # ======================================================================
 
 def predict_from_crop(
-    model: CNNGraspRegressor,
+    model: object,
     crop_tensor: "torch.Tensor",
     crop_w: int,
     crop_h: int,
@@ -484,7 +537,7 @@ def predict_from_crop(
     model.eval()
     with torch.no_grad():
         x = crop_tensor.unsqueeze(0).to(device)
-        output = model(x)[0].cpu().numpy()
+        output = flatten_model_output(model(x))[0].cpu().numpy()
 
     cx_norm, cy_norm, w_norm, h_norm, sin_2t, cos_2t = output
 
@@ -512,7 +565,7 @@ def predict_from_crop(
 
 
 def evaluate_model(
-    model: CNNGraspRegressor,
+    model: object,
     all_samples: list[dict],
     dataset: CornellGraspDataset,
     vlm_boxes: dict[tuple[str, str], tuple[int, int, int, int]],
@@ -749,10 +802,26 @@ def print_comparison_table(cnn_summary: dict) -> None:
     print()
 
 
-def _train_one_run(train_data, val_data, device, seed):
+def _train_one_run(
+    train_data,
+    val_data,
+    device,
+    seed,
+    architecture="single",
+    model_weights_path: Path | None = None,
+    history_path: Path | None = None,
+):
     """单次训练，返回模型和验证集 best loss。"""
     import torch
-    model, history = train_model(train_data, val_data, device=device, seed=seed)
+    model, history = train_model(
+        train_data,
+        val_data,
+        device=device,
+        seed=seed,
+        architecture=architecture,
+        model_weights_path=model_weights_path,
+        history_path=history_path,
+    )
     best_val_loss = min(h["val_loss"] for h in history)
     return model, best_val_loss
 
@@ -835,7 +904,10 @@ def _eval_on_splits(model, dataset, vlm_boxes, device):
     }
 
 
-def build_multi_run_summary(run_records: list[dict]) -> dict:
+def build_multi_run_summary(
+    run_records: list[dict],
+    architecture: str = "single",
+) -> dict:
     """将逐轮指标汇总为稳定、可序列化的统计结构。"""
 
     def aggregate(split_name: str) -> dict:
@@ -852,7 +924,8 @@ def build_multi_run_summary(run_records: list[dict]) -> dict:
         }
 
     return {
-        "method": "vlm_cnn_multi_run",
+        "method": f"vlm_cnn_{architecture}_multi_run",
+        "architecture": architecture,
         "num_runs": len(run_records),
         "seeds": [int(record["seed"]) for record in run_records],
         "all": aggregate("all"),
@@ -879,7 +952,22 @@ def main() -> None:
                         help="multi 模式下训练次数")
     parser.add_argument("--seed", type=int, default=42,
                         help="单次训练随机种子 (multi 模式下为起始种子)")
+    parser.add_argument(
+        "--architecture",
+        choices=["single", "multi_head"],
+        default="single",
+        help="CNN 输出结构: single / multi_head",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="模型、训练历史、预测和汇总目录；默认按 architecture 隔离",
+    )
     args = parser.parse_args()
+    output_paths = configure_output_paths(
+        resolve_output_dir(args.architecture, args.output_dir)
+    )
 
     import torch
     device = args.device if torch.cuda.is_available() else "cpu"
@@ -901,7 +989,20 @@ def main() -> None:
             print(f">>> Run {run_idx + 1}/{args.num_runs}  (seed={seed})")
             print(f"{'='*60}")
 
-            model, best_val_loss = _train_one_run(train_data, val_data, device, seed)
+            model_path = output_paths.output_dir / f"cnn_grasp_model_seed_{seed}.pt"
+            history_path = (
+                output_paths.output_dir
+                / f"training_history_seed_{seed}.json"
+            )
+            model, best_val_loss = _train_one_run(
+                train_data,
+                val_data,
+                device,
+                seed,
+                architecture=args.architecture,
+                model_weights_path=model_path,
+                history_path=history_path,
+            )
             print(f"best val_loss = {best_val_loss:.6f}")
 
             result = _eval_on_splits(model, dataset, vlm_boxes, device)
@@ -945,7 +1046,10 @@ def main() -> None:
             print(f"    各轮结果:  {[f'{r:.1f}%' for r in rates]}")
 
         # 保存汇总 JSON
-        summary = build_multi_run_summary(run_records)
+        summary = build_multi_run_summary(
+            run_records,
+            architecture=args.architecture,
+        )
         multi_json = OUTPUT_DIR / "multi_run_summary.json"
         with open(multi_json, "w", encoding="utf-8") as f:
             json.dump(summary, f, indent=2)
@@ -982,15 +1086,26 @@ def main() -> None:
             return
 
         print("\n>>> 训练 CNN 抓取回归网络...")
-        model, history = train_model(train_data, val_data, device=device, seed=args.seed)
+        model, history = train_model(
+            train_data,
+            val_data,
+            device=device,
+            seed=args.seed,
+            architecture=args.architecture,
+        )
         print(f"训练完成, best val_loss = {min(h['val_loss'] for h in history):.6f}")
 
     if args.mode in ("eval", "all"):
         print("\n>>> 全量评估...")
         import torch
-        model = CNNGraspRegressor().to(device)
+        model = create_model(args.architecture).to(device)
         if MODEL_WEIGHTS.exists():
-            model.model.load_state_dict(torch.load(MODEL_WEIGHTS, map_location=device, weights_only=True))
+            state_dict = torch.load(
+                MODEL_WEIGHTS,
+                map_location=device,
+                weights_only=True,
+            )
+            _load_state_dict(model, args.architecture, state_dict)
             print(f"加载模型权重: {MODEL_WEIGHTS}")
         else:
             print("警告: 未找到模型权重，使用随机初始化权重评估。")
@@ -1009,7 +1124,8 @@ def main() -> None:
                       f"IoU={s['mean_iou']:.4f}, angle={s['mean_angle']:.2f}°")
 
         summary = {
-            "method_name": "vlm_cnn_grasp_regressor_rgb",
+            "method_name": f"vlm_cnn_{args.architecture}_grasp_regressor_rgb",
+            "architecture": args.architecture,
             "sample_count": result["all"]["count"],
             "success_count": int(result["all"]["success_rate"] * result["all"]["count"]),
             "success_rate": result["all"]["success_rate"],
