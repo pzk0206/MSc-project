@@ -186,174 +186,118 @@ $[c_x,c_y,w,h,\sin(2\theta),\cos(2\theta)]$。双角度表示遵循 GG-CNN 的�
 固定目录接触图不能证明难度相等；image-wise 五折仍可能有相邻视角信息泄漏。由于现有文件缺少可审计的 885 图像到物体实例映射，本文不报告 object-wise。Grounding DINO 可能对 prompt 和阈值敏感，但本研究未做提示搜索。CNN 只用小规模 RGB crop 并输出单矩形，而现代方法常利用 RGB-D 与密集多抓取图。最终评价是 offline metric，不估计深度、碰撞、运动学或接触稳定性，因此不等同于物理抓取。
 
 %==============================================================================
-\chapter{Results}
+\chapter{研究结果}
 
-\section{Dataset and Implementation Verification}
-The data audit recovered 600 training, 200 validation, and 85 test images, for
-the expected total of 885. Ground-truth overlays and the split contact sheet
-were inspected to verify image--annotation alignment. The Grounding DINO output
-contained a valid localisation for all 885 samples. The traditional baseline
-failed to produce a contour-based grasp in 55 cases; both VLM-guided evaluated
-runs produced a grasp for every sample.
+\section{数据与实现验证}
+数据审计确认训练、验证和固定测试目录分别含 600、200 和 85 幅图，总数为 885。随机抽查原图、正抓取叠加图和 Figure~\ref{fig:cornell-splits} 后，图像与标注 ID 对齐。传统整图基线有 55 幅图未产生轮廓抓取；保存的 Grounding DINO 运行对 885/885 幅图返回有效框，两个 VLM 引导流程均产生抓取矩形。这里的 885/885 只验证输出覆盖完整，不能说明框紧密包围物体，更不能单独证明定位或抓取正确。
 
-Figure~\ref{fig:cornell-splits} shows equal numbers of examples from each split
-to avoid allowing the larger training set to dominate visual inspection. The
-examples confirm substantial variation within every split, but visual sampling
-alone does not establish comparable difficulty. A quantitative warning is that
-the traditional baseline succeeded on 53.17\% of training images but 74.12\%
-of test images. The higher test value for a non-learning baseline indicates
-that directories 09--10 may contain easier cases for the implemented image
-processing rules.
+固定目录的难度并不均衡。传统非学习基线在 600 幅训练图上的成功率为 53.17\%，在 85 幅测试图上却为 74.12\%。同一确定性算法在测试目录反而明显更高，说明目录 09--10 对当前颜色与轮廓规则可能更容易。该观察不证明物体类别本身更简单，却足以警告：固定 85 样本结果适合逐样本配对和历史复核，不适合作为广义泛化结论。
 
-\section{Quantitative Results}
-Table~\ref{tab:main-results} reports the primary whole-dataset comparison. The
-VLM-guided geometric system improves success from 56.95\% to 73.33\%, an
-absolute gain of 16.38 percentage points. It also reduces mean angle error by
-14.81 degrees. Across deterministic five-seed runs, the single-head CNN is
-1.22 points above the geometric backend and the multi-head CNN is 2.26 points
-above it. The multi-head model also has the highest mean IoU, while the
-geometric backend retains the lowest angle error. These results suggest that
-localisation supplies the largest measured gain, while the local backends offer
-different strengths.
+结果写入前还进行了文件级溯源。传统 CV 和 VLM + geometry 的摘要均覆盖 885 个唯一 sample ID；五 seed 聚合只读取种子 42--46 的隔离目录；image-wise 的每个架构各保存五份测试预测，合并后均为 885 个互不重复 ID。两个架构记录的 manifest 哈希一致，且每个保存的最低验证损失与训练历史中的最小值相符。由此可以排除样本遗漏、重复计数或单头与多头读取不同 fold 的实现错误。该验证只保证统计过程一致，不替代对算法有效性的分析。
+
+\section{研究问题一：开放词汇定位的作用}
+Table~\ref{tab:main-results} 首先比较整图传统 CV 与保持相同几何规则、仅加入定位约束的 VLM + geometry。传统 CV 成功 504/885，成功率 56.95\%，平均最佳 IoU 为 0.3360，平均角度误差为 $29.62^\circ$；VLM + geometry 成功 649/885，分别达到 73.33\%、0.4182 和 $14.81^\circ$。成功率绝对增加 16.38 个百分点，IoU 增加 0.0822，角度误差减少 $14.81^\circ$，同时不再出现缺失预测。
+
+这三项指标方向一致，回答了研究问题一：在当前 Cornell RGB、\texttt{small object} 提示和既定阈值下，把几何处理限制到 Grounding DINO 框内，优于在整图直接寻找轮廓。由于后端几何规则相同，测得差异主要与处理范围变化相关。但实验没有与所有传统检测器比较，也没有人工标注定位框质量，所以结论只能针对所实现的整图基线；返回框覆盖率本身不是提升原因的独立证据。
+
+三个连续或离散指标提供不同信息。成功数增加 145，说明更多矩形同时跨过 IoU 与角度阈值；平均 IoU 上升表明改善并非只发生在方向维度；角度误差约减半，则说明限定局部轮廓后主轴估计也更接近正标注。与此同时，55 个整图缺失预测全部消失，表明定位框至少提供了可处理区域。由于没有逐框定位 IoU 标注，仍不能区分收益究竟来自排除背景、改变轮廓候选排序，还是扩大框后的局部尺度效应。这些机制留到讨论章作为解释，而不在结果章确定因果。
 
 \begin{table}[htbp]
   \centering
-  \caption{Whole-dataset results on all 885 Cornell images. CNN values are the
-  mean $\pm$ population standard deviation over seeds 42--46.}
+  \caption{全部 885 幅 Cornell 图像上的流程表征结果。CNN 数值为随机种子 42--46 的均值 $\pm$ 总体标准差；其包含训练与验证目录，不作为纯折外泛化估计。}
   \label{tab:main-results}
   \resizebox{\linewidth}{!}{%
   \begin{tabular}{lrrrr}
     \toprule
-    Method & Successful & Success rate & Mean best IoU & Mean angle error \\
+    方法 & 成功数 & 成功率 & 平均最佳 IoU & 平均角度误差 \\
     \midrule
-    Traditional CV baseline & 504/885 & 56.95\% & 0.3360 & $29.62^\circ$ \\
-    VLM + geometric backend & 649/885 & 73.33\% & 0.4182 & $14.81^\circ$ \\
-    VLM + single-head CNN, five runs & --- & $74.55\%\pm1.77\%$ &
+    传统 CV 基线 & 504/885 & 56.95\% & 0.3360 & $29.62^\circ$ \\
+    VLM + 几何后端 & 649/885 & 73.33\% & 0.4182 & $14.81^\circ$ \\
+    VLM + 单头 CNN，五次运行 & --- & $74.55\%\pm1.77\%$ &
       $0.4535\pm0.0149$ & $16.62^\circ\pm0.83^\circ$ \\
-    VLM + multi-head CNN, five runs & --- & $75.59\%\pm1.90\%$ &
+    VLM + 多头 CNN，五次运行 & --- & $75.59\%\pm1.90\%$ &
       $0.4640\pm0.0165$ & $15.20^\circ\pm0.29^\circ$ \\
     \bottomrule
   \end{tabular}}
 \end{table}
 
-The earlier 73.11\% single-run CNN figure is excluded because its independent
-JSON and per-sample CSV were overwritten by later repeated runs. The
-deterministic, seed-isolated aggregate files are the provenance sources for the
-two CNN rows in Table~\ref{tab:main-results}.
+\section{研究问题二：几何与 CNN 后端比较}
+在全部 885 幅图的流程表征中，确定性五随机种子单头 CNN 为 $74.55\%\pm1.77\%$、IoU $0.4535\pm0.0149$、角度误差 $16.62^\circ\pm0.83^\circ$；多头为 $75.59\%\pm1.90\%$、$0.4640\pm0.0165$ 和 $15.20^\circ\pm0.29^\circ$。两种 CNN 的成功率与 IoU 均高于几何后端，而几何后端的 $14.81^\circ$ 角度误差最低。由于本表包含 CNN 训练和验证目录，这些值用于描述已实现流程及随机训练波动，不作为严格折外性能；真正的架构泛化对照见研究问题三。
 
-\subsection{Fixed 85-sample test subset (directories 09--10)}
-Table~\ref{tab:fixed-test} compares the two VLM-guided backends on the same
-85 images. The two deterministic CNN variants have the same mean success rate,
-but the multi-head model has a smaller success-rate standard deviation and
-higher mean IoU. The geometric method has substantially lower angle error.
+早期曾记录一个 73.11\% 的单次 CNN 数字，但其独立 JSON 与逐样本 CSV 已被后来重复运行覆盖，不能从当前产物复核，因此不进入主表。Table~\ref{tab:main-results} 的 CNN 行只取自种子隔离的正式聚合文件。这一处理避免把“记得的结果”与仍可审计结果混合。
+
+Table~\ref{tab:fixed-test} 在同一 85 幅目录 09--10 图像上比较后端。几何方法为 64/85、75.29\%、IoU 0.3921、角度误差 $12.01^\circ$。单头五 seed 平均成功率为 $80.47\%\pm5.19\%$，多头也为 $80.47\%\pm3.38\%$；多头平均 IoU 0.5075 高于单头 0.4694，但二者角度误差 18.23° 与 18.93° 都高于几何。故学习后端主要优势出现在中心和尺度共同决定的空间重合，而显式“垂直长轴”规则在该子集保留了方向优势。
 
 \begin{table}[htbp]
   \centering
-  \caption{Results on the fixed 85-sample test subset (directories 09--10).
-  CNN values are mean $\pm$ population standard deviation over seeds 42--46.}
+  \caption{固定 85 样本测试子集（目录 09--10）结果。CNN 为随机种子 42--46 的均值 $\pm$ 总体标准差。}
   \label{tab:fixed-test}
   \resizebox{\linewidth}{!}{%
   \begin{tabular}{lrrrr}
     \toprule
-    Method & Successful & Success rate & Mean best IoU & Mean angle error \\
+    方法 & 成功数 & 成功率 & 平均最佳 IoU & 平均角度误差 \\
     \midrule
-    VLM + geometric backend & 64/85 & 75.29\% & 0.3921 & $12.01^\circ$ \\
-    VLM + single-head CNN & --- & $80.47\%\pm5.19\%$ &
+    VLM + 几何后端 & 64/85 & 75.29\% & 0.3921 & $12.01^\circ$ \\
+    VLM + 单头 CNN & --- & $80.47\%\pm5.19\%$ &
       $0.4694\pm0.0343$ & $18.23^\circ\pm1.15^\circ$ \\
-    VLM + multi-head CNN & --- & $80.47\%\pm3.38\%$ &
+    VLM + 多头 CNN & --- & $80.47\%\pm3.38\%$ &
       $0.5075\pm0.0315$ & $18.93^\circ\pm1.82^\circ$ \\
     \bottomrule
   \end{tabular}}
 \end{table}
 
-\subsection{Image-wise five-fold cross-validation}
-Table~\ref{tab:image-wise-cv} reports out-of-fold evaluation using the shared
-manifest. The single-head model succeeds on 635 images and the multi-head model
-on 647. Multi-head regression therefore adds 12 successes, or 1.36 percentage
-points, raises mean IoU by 0.0190, and reduces mean angle error by
-$0.34^\circ$. Because all folds contain 177 images, the pooled success rate
-equals the unweighted fold mean; the uncertainty shown is the population
-standard deviation across the five folds, not across training seeds.
+固定测试表的标准差还显示两类稳定性差异。单头成功率的 seed 间标准差为 5.19 个百分点，多头为 3.38，说明在这一小子集上多头的二元成功率对初始化较不敏感；但多头角度误差标准差 1.82°，高于单头 1.15°，所以不能笼统称为“所有指标更稳定”。而且 85 个样本使一次标签翻转约对应 1.18 个百分点，少数阈值边界预测即可明显改变成功率。固定子集的均值差异应与 image-wise 五折共同判断。
+
+用于案例图的 seed 46 单头在这 85 幅图上成功 68 次。与几何的 64 次成功相比，净成功数只多 4，但配对表并非“几何的四个失败被 CNN 修复”这么简单：CNN 新增 16 个独有成功，同时失去 12 个几何独有成功，二者抵消后才得到净增 4。这种配对信息说明总体百分比会隐藏后端间的大量样本交换，也是后续提出互补性假设的直接观察基础。
+
+\section{研究问题三：单头与多头 CNN 比较}
+Table~\ref{tab:image-wise-cv} 使用字节相同的 image-wise manifest，两个架构在每折具有相同 566/142/177 划分、训练 seed、crop 和优化规则，唯一设计差异是回归头组织。单头的 885 个折外预测成功 635 个，pooled 成功率 71.75\%、IoU 0.4390、角度误差 $17.74^\circ$；多头成功 647 个，分别为 73.11\%、0.4580 和 $17.40^\circ$。因此多头增加 12 次成功，即 $+1.36$ 个百分点，IoU 增加 0.0190，角度误差减少 $0.34^\circ$。
 
 \begin{table}[htbp]
   \centering
-  \caption{Image-wise five-fold results. Central values are pooled over 885
-  out-of-fold predictions; $\pm$ values are population standard deviations
-  across five equally sized folds.}
+  \caption{Image-wise 五折结果。中心值汇总 885 个折外预测，$\pm$ 为五个等大测试折之间的总体标准差。}
   \label{tab:image-wise-cv}
   \resizebox{\linewidth}{!}{%
   \begin{tabular}{lrrrr}
     \toprule
-    Architecture & Successful & Success rate & Mean best IoU &
-      Mean angle error \\
+    架构 & 成功数 & 成功率 & 平均最佳 IoU & 平均角度误差 \\
     \midrule
-    Single-head CNN & 635/885 & $71.75\%\pm2.02\%$ &
+    单头 CNN & 635/885 & $71.75\%\pm2.02\%$ &
       $0.4390\pm0.0190$ & $17.74^\circ\pm1.23^\circ$ \\
-    Multi-head CNN & 647/885 & $73.11\%\pm2.98\%$ &
+    多头 CNN & 647/885 & $73.11\%\pm2.98\%$ &
       $0.4580\pm0.0191$ & $17.40^\circ\pm1.13^\circ$ \\
     \bottomrule
   \end{tabular}}
 \end{table}
 
-These values are lower than the five-seed whole-dataset means because the
-cross-validation prediction for each image comes only from a model for which
-that image was held out. They support a modest and consistent advantage for
-the multi-head decomposition under the same RGB crops and fold membership.
-They remain only finitely comparable with prior RGB-D results, and they do not
-establish unseen-object generalisation.
+这里的 $\pm$ 是 fold 间总体标准差，不是五个训练 seed 的波动。因为每折均有 177 幅图，pooled 成功率与未加权 fold 均值相同；IoU 和角度亦按全部折外样本汇总。多头在三项 pooled 指标上都更好，但成功率 fold 标准差为 2.98 个百分点，高于单头的 2.02，且 fold 0 中多头反而少 10 次成功。因此，研究问题三的回答是“共同协议下存在有限总体优势”，而不是每个 fold 都占优或差异足以构成最新水平。Image-wise 结果仍允许同物体视角跨折，与 RGB-D 文献仅有限可比，也不建立 object-wise 泛化。
 
-\section{Qualitative Results}
-Figure~\ref{fig:backend-failures} shows paired outputs selected from three
-outcome categories rather than only displaying favourable examples. Green
-rectangles are Cornell positive annotations, yellow is the VLM localisation,
-blue is the seed-46 CNN prediction, and red is the geometric prediction. The
-CNN-only cases illustrate situations where learned centre and size estimates
-overcome the fixed geometric size rule. Geometry-only cases show that the
-perpendicular-to-long-axis prior can supply a better orientation. The shared
-failures identify cases in which a common crop does not guarantee a valid
-grasp estimate.
+逐折结果进一步限定这一结论。单头五折成功数依次为 132、122、124、129、128，对应 74.58\%、68.93\%、70.06\%、72.88\%、72.32\%；多头依次为 122、130、125、136、134，对应 68.93\%、73.45\%、70.62\%、76.84\%、75.71\%。多头在 fold 1--4 各增加 8、1、7、6 次成功，却在 fold 0 减少 10 次。IoU 也呈同样非一致性：fold 0 多头比单头低 0.0439，而其余四折提高 0.0129--0.0497。角度误差在五折中有三折降低、两折升高。Pooled 改善因此来自多数折的累积，而非每个划分都重复完全相同的优势。
+
+正式五折值低于全数据五 seed 表中的均值，符合评价口径差异：每个 image-wise 预测只来自未用该图训练或选择 checkpoint 的模型，而全数据表包含训练与验证目录。它不是“后来模型退步”的证据。相反，折外数值更适合回答架构比较，五 seed 数值更适合观察相同流程的训练随机性。把两者并列但分开命名，可以避免用较高的非折外数字替代泛化估计。
+
+此外，成功率、IoU 和角度并非同一量的重复表达。成功率反映联合阈值，IoU 连续描述空间重合，角度误差单独描述夹爪方向。多头在 pooled 三项同时改善使其总体排序较清楚，但逐折符号变化说明样本组成仍会影响效应大小；因此正文保留原始计数、连续指标和标准差，而不只报告一个百分比。
+
+\section{定性案例与失败分析}
+为避免只展示有利样本，Figure~\ref{fig:backend-failures} 从固定 85 样本中按结果类别选择案例。绿色为 Cornell 正标注，黄色为 VLM 框，蓝色为保存的 seed 46 单头 CNN 预测，红色为几何预测。逐样本二元分类得到：两者均成功 52，只有 CNN 成功 16，只有 geometry 成功 12，两者均失败 5；因此有 28 幅图的后端结论不一致。这里使用 seed 46 的保存逐样本文件进行可视化，不能代替五 seed 均值。
 
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=\linewidth]{images/backend_failure_cases.png}
-  \caption{Representative paired failures on the fixed test subset: CNN-only
-  successes, geometry-only successes, and failures shared by both backends.
-  Samples were selected by outcome category to expose complementarity and
-  common limitations, not to estimate category frequency visually.}
+  \caption{固定测试子集的代表性配对案例：仅 CNN 成功、仅几何成功和共同失败。样本按结果类别选择，用于展示互补与共同限制，不通过图片估计类别频率。}
   \label{fig:backend-failures}
 \end{figure}
 
-\section{Comparative Analysis}
-The whole-dataset comparison supports a strong but bounded conclusion:
-constraining the existing colour/contour estimator with open-vocabulary
-localisation is more effective than applying it to the whole image. This is
-supported by success rate, IoU, angle error, and elimination of missing-contour
-predictions. It does not isolate whether Grounding DINO is superior to every
-possible conventional detector.
+仅 CNN 成功的图中，蓝色矩形通常在中心或尺度上更接近某个正标注；这与 CNN 较高的平均 IoU 一致，但图片本身不能证明网络“学会了”特定部位。仅 geometry 成功的案例常见红色方向更接近标注，符合几何后端较低角度误差；可能原因是长轴垂线先验，但仍属于基于现象的解释。共同失败说明正确或宽松的 VLM crop 并不足以保证抓取，误差还可能来自框内分割、单目标多解标注、尺寸回归或方向边界。
 
-The paired test analysis further divides the 85 images into 52 cases where both
-backends succeed, 16 where only the CNN succeeds, 12 where only geometry
-succeeds, and five where both fail. Thus, neither local backend strictly
-dominates the other: 28 images produce a discordant binary outcome. The CNN's
-higher IoU and the geometric backend's lower angle error are consistent with
-this complementarity. A future hybrid could retain the geometric orientation
-prior while learning centre and scale, but that hypothesis is not tested in the
-current results.
+边界案例还揭示二值阈值的限制。接近 IoU 0.25 或 $30^\circ$ 的矩形只需轻微变化就会翻转成功标签，因此正文同时保留连续指标。过松定位框会把背景带回几何与 CNN；方向失败则可能在中心正确时仍被判错。上述图片支持“空间学习与方向先验可能互补”的假设，但没有执行混合模型实验，不能把假设写成已验证结论。
 
-The image-wise five-fold comparison supplies a cleaner architecture ablation.
-Both models use identical folds, training seed, crops, and optimisation rules;
-only the regression-head organisation changes. The multi-head model improves
-all three pooled metrics, but the 1.36-point success gain is modest and its
-fold-to-fold success variation is larger. This supports the multi-head model as
-the stronger controlled backend, not as a new state-of-the-art detector.
+六类观察可用于后续错误诊断。CNN-only 指向中心或尺度回归的潜在收益；geometry-only 指向方向先验；shared failure 表明共同前端之后仍有后端瓶颈；near-threshold case 暴露二值规则敏感性；VLM loose box case 显示定位覆盖与紧密度不同；orientation failure 则说明高 IoU 仍可能因方向判错。类别名称描述可见现象，不是自动生成的因果标签，也没有从少量展示图推断总体频率。
 
-The test subset scores must be interpreted alongside the split audit. Because
-even the traditional baseline performs much better on directories 09--10 than
-on directories 01--06, the CNN's higher fixed-test result is not evidence that
-unseen objects are generally easier or that the model has achieved broad
-object-level generalisation. The defensible finding is narrower: on these same
-85 images and this evaluation implementation, the saved CNN run succeeds four
-times more often than the geometric backend.
+\section{结果小结}
+三个研究问题得到层层收窄的证据。第一，加入开放词汇定位后，既定几何流程在全数据上的成功率、IoU、角度和输出完整性同时改善，最大绝对成功率变化来自定位前端。第二，共同 crop 下 CNN 的空间重合更好，几何角度先验更稳定；固定 85 样本的 28 个不一致结果表明没有一个后端逐样本完全支配另一个。第三，共同 image-wise manifest 下，多头相对单头在 pooled 三指标均改善，但幅度小且成功率折间波动更大。
+
+这些结果的可辩护范围是 Cornell RGB 单目标、通用提示、当前实现与离线 rectangle metric。全数据五 seed 表用于训练波动和流程表征，固定 85 样本用于配对案例，image-wise 五折用于正式架构比较；三者不能互换。结果不证明对未见物体、杂乱开放世界或真实机器人执行的同等增益。
 
 %==============================================================================
 \chapter{General Discussion}
