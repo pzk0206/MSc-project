@@ -40,23 +40,35 @@
 \tableofcontents
 
 %==============================================================================
-\chapter{Introduction}
+\chapter{引言}
 \pagenumbering{arabic}
 
-\section{Background and Motivation}
-\todo{About 3--5 paragraphs. Introduce robotic grasp detection, visual perception, and VLM/open-vocabulary grounding. Explain the current problem and why it remains unresolved or worth studying. Then state the theoretical and practical motivation for the project.}
+\section{背景与研究动机}
+机器人要在未知环境中操作物体，首先必须从视觉观测中确定“抓哪里”和“以什么方向抓”。二维抓取检测把这一问题表示为图像平面上的有向矩形，为比较不同感知方法提供了可计算接口。然而，传统整图分割容易受到背景、阴影和反光影响；监督学习模型则依赖抓取标注与训练分布。开放词汇视觉语言模型能够根据文本定位目标，为抓取系统提供另一种前端，但目标检测框描述的是物体范围，而不是可夹持部位，两者之间仍需要可靠的几何或学习后端。
 
-\section{Research Questions}
-\todo{State the main research question and supporting sub-questions. Explain why these questions matter for robotic perception and grasp detection.}
+已有研究常同时改变 RGB/RGB-D 输入、网络结构、数据划分和输出形式，因而很难判断性能变化究竟来自目标定位、抓取回归还是实验协议。本研究选择模块化设计：以传统整图计算机视觉为参照，加入 Grounding DINO 定位前端后分别连接确定性几何后端、单头 CNN 和多头 CNN。共同裁剪使后端比较保持输入一致，确定性重复实验和共同 fold manifest 则使统计口径可审计。研究动机不是追逐单一最高准确率，而是识别各模块实际解决了什么问题、仍会在哪里失败。
 
-\section{Research Aim and Objectives}
-\todo{State the overall aim of the project, then list concrete objectives such as dataset preparation, baseline implementation, VLM-assisted pipeline design, evaluation, and failure case analysis.}
+\section{研究问题}
+本论文围绕三个递进问题展开：
 
-\section{Scope of the Project}
-\todo{Clarify boundaries: this project focuses on offline 2D grasp perception on Cornell, not physical robot control or full manipulation. State optional parts such as few-shot adaptation as extensions rather than core requirements.}
+\begin{enumerate}
+    \item 在 Cornell RGB 单目标图像和通用文本提示条件下，Grounding DINO 是否能改善传统整图几何流程？
+    \item 当几何、单头 CNN 与多头 CNN 接收共同 VLM crop 时，各后端在空间重合、方向估计和失败类型上有何优势与局限？
+    \item 在字节相同的 image-wise 五折 manifest 下，多头 CNN 是否优于单头 CNN，其增益是否在不同指标和 fold 上一致？
+\end{enumerate}
 
-\section{Dissertation Structure}
-\todo{Briefly describe the remaining chapters.}
+第一个问题隔离定位前端的作用，第二个问题研究手工先验与数据驱动回归的差异，第三个问题进一步控制训练样本划分，只检验输出头组织方式。三者共同回答开放词汇定位如何以可解释、可复现的方式嵌入二维抓取管线。
+
+\section{研究目标与具体任务}
+总体目标是建立并审计一个 RGB-only 的开放词汇辅助二维抓取实验框架。具体任务包括：解析 Cornell 正抓取标注并统一矩形表示；实现整图传统视觉基线；使用通用 \texttt{small object} 提示生成 Grounding DINO 定位框与裁剪；在共同裁剪上实现几何、单头和多头后端；以固定目录、五个随机种子及 image-wise 五折分别评价开发结果、训练波动和图像划分变化；计算 Cornell rectangle success、IoU 与角度误差；最后通过逐样本配对、定性图和保存的 JSON/CSV 追踪失败与结果来源。
+
+\section{研究范围与意义}
+研究范围限定为 Cornell 数据集上的离线二维 RGB 感知，不融合深度，不涉及机器人坐标变换、碰撞检测、轨迹规划、力控制或真实抓取执行。由于缺少权威图像到物体实例映射，本文不把当前 image-wise 五折解释为 object-wise 未见物体泛化；矩形成功也不等同于物理机器人成功。通用提示被固定为控制变量，prompt 搜索与 VLM 微调属于后续工作。
+
+学术上，本研究通过共享定位裁剪减少模块混杂，补充 VLM 前端与轻量抓取后端之间的受控证据。工程上，定位器和后端可以独立替换，便于在算力有限的平台上诊断误差来源。更重要的是，论文同时报告均值、波动和逐样本互补性，使结论强度与现有证据相匹配。
+
+\section{论文结构}
+第二章按技术主题批判性回顾抓取矩形、深度学习、开放词汇定位和语言驱动抓取，并提出研究缺口。第三章说明数据、三条流程、训练协议、评价方法与研究伦理。第四章按三个研究问题报告定量和定性结果，第五章联系既有文献解释发现及限制，第六章逐条回答研究问题并提出未来工作。附录记录复现命令、环境、结果产物与固定划分的历史用途。
 
 %==============================================================================
 \chapter{文献综述}
