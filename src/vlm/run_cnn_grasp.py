@@ -166,7 +166,7 @@ NUM_EPOCHS = 80
 LEARNING_RATE = 1e-3
 WEIGHT_DECAY = 1e-4
 
-# ——— 数据集划分：按 Cornell 子目录划分，避免同物体泄露 ———
+# ——— 旧实验的数据集划分：按 Cornell 存储子目录划分 ———
 TRAIN_DIRS = {"01", "02", "03", "04", "05", "06"}
 VAL_DIRS = {"07", "08"}
 TEST_DIRS = {"09", "10"}
@@ -309,20 +309,18 @@ def gt_to_target(gt_rects: list[np.ndarray], crop_w: int, crop_h: int) -> dict:
     }
 
 
-def build_datasets():
+def build_all_samples() -> list[dict]:
     """
-    遍历 Cornell 数据集，按 VLM box 裁剪，按目录划分 train/val/test。
+    遍历 Cornell 数据集并按 VLM box 构建全部有效 crop 样本。
 
     返回:
-        train_samples, val_samples, test_samples
-        每个 sample 是 dict: {"key": (dir, sample_id), "tensor": Tensor, "target": dict}
+        每个 sample 是 dict:
+        {"key": (dir, sample_id), "tensor": Tensor, "target": dict}
     """
-    import torch
-
     vlm_boxes = load_vlm_boxes()
     dataset = CornellGraspDataset(DATASET_ROOT)
 
-    train, val, test = [], [], []
+    all_samples = []
 
     for i in range(len(dataset)):
         sample = dataset[i]
@@ -350,14 +348,46 @@ def build_datasets():
             "tensor": crop_tensor,
             "target": target,
         }
+        all_samples.append(item)
 
-        obj_dir = sample["object_directory"]
-        if obj_dir in TRAIN_DIRS:
-            train.append(item)
-        elif obj_dir in VAL_DIRS:
-            val.append(item)
-        elif obj_dir in TEST_DIRS:
-            test.append(item)
+    return all_samples
+
+
+def partition_samples_by_role(
+    samples: list[dict],
+    roles: dict[str, str],
+) -> tuple[list[dict], list[dict], list[dict]]:
+    """Partition samples using explicit roles keyed by Cornell sample ID."""
+    partitions = {"train": [], "validation": [], "test": []}
+    for item in samples:
+        sample_id = item["key"][1]
+        if sample_id not in roles:
+            raise ValueError(f"missing role for sample {sample_id}")
+        role = roles[sample_id]
+        if role not in partitions:
+            raise ValueError(f"unknown role for sample {sample_id}: {role}")
+        partitions[role].append(item)
+    return (
+        partitions["train"],
+        partitions["validation"],
+        partitions["test"],
+    )
+
+
+def build_datasets():
+    """Build the legacy fixed-directory train/validation/test split."""
+    all_samples = build_all_samples()
+    roles = {
+        item["key"][1]: (
+            "train"
+            if item["key"][0] in TRAIN_DIRS
+            else "validation"
+            if item["key"][0] in VAL_DIRS
+            else "test"
+        )
+        for item in all_samples
+    }
+    train, val, test = partition_samples_by_role(all_samples, roles)
 
     print(f"数据集构建完成: train={len(train)}, val={len(val)}, test={len(test)}")
     return train, val, test
