@@ -2,6 +2,28 @@
 
 本文是回顾已完成项目工作的入口。详细内容保留在按日期命名的周报中。
 
+## 2026-07-26 — 完整中文论文初稿与最终验证
+
+- 按 `docs/agent/DISSERTATION_WRITING_GUIDE.md` 将英文 LaTeX 工作稿结构性
+  改写为完整中文初稿；英文旧稿仍可从 Git 提交 `a4d62d6` 恢复。
+- 完成 312 字摘要、1,114 字引言、3,191 字文献综述、1,809 字方法论、
+  3,020 字结果和 1,003 字结论；全文无 `\todo{}`。
+- 文献综述按主题组织，重点批判分析 Lenz、Redmon、GG-CNN、Grounding DINO
+  和 Vuong 等工作，并明确 RGB/RGB-D、image-wise/object-wise、密集/单矩形
+  与离线/物理抓取的有限可比边界。
+- 方法论补充研究选择理由、控制变量和 Research Ethics，明确公开数据、外部
+  模型与代码出处、结果不夸大、确定性、哈希及计算资源责任。
+- 结果章按三个研究问题重组，保留全数据五 seed、固定 85 样本配对和共同
+  image-wise 五折三种统计口径；所有核心数字由保存 JSON/CSV 复核。
+- 中文化摘要、目录、章节、图表标签、致谢和附录；保留英文作者、文献标题、
+  期刊、BibTeX 条目和 citation key。
+- 旧 `agsm.bst` 在当前 BibTeX 引擎中产生 36 条 entry-mutation errors，改用
+  natbib 兼容的 `plainnat` 作者—年份样式后，引用与参考文献无未定义项。
+- Tectonic 成功编译 27 页中文 PDF；PDF 回读覆盖摘要、目录、七个主要章节、
+  表/图标签和参考文献，关键页面视觉检查无缺字或表格越界。
+- 12 个 citation key、12 个核心数字和章节字符范围全部通过自动检查；
+  最终代码回归为 32 passed，`git diff --check` 通过。
+
 ## 2026-07-26 — Cornell image-wise 五折实现与训练前审计
 
 - 设计并实现确定性的 image-wise 五折 manifest；seed 42 下每折固定为
