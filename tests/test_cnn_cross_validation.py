@@ -1,11 +1,15 @@
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
 from src.vlm.run_cnn_cross_validation import (
+    aggregate_saved_folds,
     build_architecture_comparison,
     build_cross_validation_summary,
     build_fold_paths,
+    prepare_manifest,
     validate_complete_fold_records,
 )
 
@@ -128,3 +132,45 @@ def test_architecture_comparison_requires_the_same_manifest() -> None:
     multi["manifest_sha256"] = "different"
     with pytest.raises(ValueError, match="manifest"):
         build_architecture_comparison(single, multi)
+
+
+def test_prepare_manifest_uses_all_real_cornell_samples(
+    tmp_path: Path,
+) -> None:
+    rows, json_path, manifest_hash = prepare_manifest(tmp_path, seed=42)
+
+    assert json_path == tmp_path / "image_wise_folds_seed_42.json"
+    assert json_path.exists()
+    assert len({row["sample_id"] for row in rows}) == 885
+    assert len([row for row in rows if row["role"] == "test"]) == 885
+    assert len(manifest_hash) == 64
+
+
+def test_aggregate_saved_folds_requires_five_complete_outputs(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(FileNotFoundError, match="fold_0"):
+        aggregate_saved_folds(
+            architecture="single",
+            output_root=tmp_path,
+            expected_sample_ids={"pcd0100"},
+            manifest_hash="abc",
+            seed=42,
+        )
+
+
+def test_cross_validation_cli_can_run_as_a_script() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "src/vlm/run_cnn_cross_validation.py",
+            "--help",
+        ],
+        cwd=Path.cwd(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "--mode" in result.stdout
