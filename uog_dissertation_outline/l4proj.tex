@@ -336,19 +336,29 @@ Figure~\ref{fig:backend-failures} 中，CNN-only 的 10/pcd1008、10/pcd1013、1
 第六，几何与 CNN 都只输出单矩形，不能表示一物多抓取。第七，评价仅为 offline metric，无真实机器人、碰撞、接触或抬升验证。第八，各 fold 只有 566 幅训练图，4\,GB GPU 限制模型容量与搜索范围；五 seed 和 fold 统计均显示非零波动。因此，当前 CNN 应被理解为受控轻量基线，多头结果是局部证据，而非最新方法或最终架构。
 
 %==============================================================================
-\chapter{Conclusion}
+\chapter{结论}
 
-\section{Summary of the Dissertation}
-\todo{Summarise the full dissertation: background, literature gap, methodology, experiments, results, and discussion.}
+\section{研究总结}
+本论文研究开放词汇定位如何作为二维机器人抓取检测的前端。针对既有文献在 RGB/RGB-D、数据划分和输出形式上难以直接比较的问题，研究在 Cornell 的 885 幅 RGB 图像上构建整图传统 CV、VLM + geometry、VLM + 单头 CNN 和 VLM + 多头 CNN，并用共同标注、固定目录、五个随机种子及共同 image-wise 五折区分定位贡献、训练波动与架构差异。评价同时保留 rectangle success、IoU、角度误差和逐样本案例。
 
-\section{Answers to the Research Questions}
-\todo{Answer each research question clearly using evidence from the results and discussion.}
+论文的核心发现不是某个模型在所有条件下最优，而是性能可以沿模块解释：首先缩小目标区域解决整图轮廓干扰，随后学习后端改善空间参数，最后多头分解产生较小的架构增益。连续指标、折间波动和失败案例防止二元成功率掩盖角度或尺度问题。由此，研究问题、控制变量、保存产物与结论形成一条可追溯证据链。
 
-\section{Contributions and Practical Relevance}
-\todo{State the final contributions and explain the real-world or practical relevance of the work.}
+\section{研究问题回答}
+\textbf{研究问题一：}在当前 Cornell RGB、通用 \texttt{small object} 提示和既定阈值下，Grounding DINO 定位框明显改善了原整图几何流程。成功率由 56.95\% 升至 73.33\%，IoU 与角度指标也同步改善。这证明定位范围对当前基线重要，但不证明任意 VLM 在任意场景都优于任务专用检测器。
 
-\section{Limitations and Recommendations}
-\todo{Briefly restate the main limitations and provide recommendations for future work, such as real robot validation, stronger segmentation, larger datasets, and improved adaptation.}
+\textbf{研究问题二：}共同 VLM crop 下，CNN 更擅长中心与尺度共同决定的空间重合，几何后端则保留较稳定的方向先验。固定 85 样本中存在 16 个 CNN-only 和 12 个 geometry-only 成功，说明两者互补而非严格支配；混合后端是合理假设，但尚未验证。
+
+\textbf{研究问题三：}在字节相同的 image-wise manifest 下，多头相对单头改善全部 pooled 指标：成功率 73.11\% 对 71.75\%，IoU 0.4580 对 0.4390，角度误差 17.40° 对 17.74°。提升幅度有限，且并非每折都占优，因此结论是受控条件下的小幅总体优势，而非新的最新水平。
+
+\section{贡献与实践意义}
+研究贡献包括：建立定位前端与抓取后端可替换的三阶段比较；完成单头/多头的确定性五 seed 对照；生成并审计共同 image-wise 五折 manifest；以逐样本配对揭示空间回归与方向先验的互补；用 JSON、CSV、哈希和结果溯源约束论文主张。实践上，该结构便于在有限算力中先诊断目标选择，再替换局部后端，而不必把大型 VLM 重新训练成完整抓取器。
+
+这些贡献属于实验设计、实现和分析层面，而不是提出新的基础网络。其价值在于把常被一并修改的定位、裁剪和抓取回归拆开，并为每一步保留可复核输入与输出。对后续开发者而言，若定位已足够紧，可集中改进后端；若错误来自宽松框，则扩大 CNN 容量可能并非最有效选择。这样的诊断顺序比只比较最终百分比更能指导有限资源下的迭代。
+
+\section{局限与未来工作}
+结论受 Cornell 小数据、RGB-only、单矩形、通用 prompt、image-wise 视角泄漏和离线指标限制；矩形成功不等同于物理抓取。下一步应恢复权威图像到物体映射并实施 object-wise 五折，加入 RGB-D 与密集多抓取输出，正式测试“学习中心/尺度 + 几何方向”的混合模型，并分析 prompt 与框阈值敏感性。最终还需在真实机器人上加入标定、碰撞检查、轨迹规划、接触与抬升成功检测，验证二维改善能否转化为操作收益。
+
+未来实验还应预注册 fold、报告逐样本差异，并把定位框质量作为独立指标，从而区分上游选择错误与下游 affordance 错误。若扩展到杂乱场景，应使用具体语言指令测试目标消歧，而不能由单目标通用提示结果直接外推。
 
 %==============================================================================
 \begin{appendices}
