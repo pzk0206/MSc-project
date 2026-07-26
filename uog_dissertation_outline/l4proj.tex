@@ -120,199 +120,70 @@ Vuong 等人更直接研究语言驱动抓取，在 Grasp-Anything++ 上把自�
 这一缺口也决定了论文的批判立场：若定位前端带来最大变化，则应优先研究裁剪质量而非盲目扩大后端；若几何与 CNN 在不同误差维度互补，则单一成功率会掩盖设计机会；若多头只产生有限增益，则结果应按效应大小和折间稳定性解释，而不能仅凭均值上升作强结论。由此，文献综述不只提供方法清单，也给出了后续研究问题、控制变量和结论强度的依据。
 
 %==============================================================================
-\chapter{Methodology}
+\chapter{方法论}
 
-\section{Research Design}
-This dissertation uses a controlled, dataset-based experiment to examine where
-open-vocabulary localisation is useful in a 2D grasp detection pipeline. No
-human participants or questionnaire data are involved. Three systems are
-evaluated. The first is a traditional computer-vision (CV) baseline that
-operates on the complete image. The second uses Grounding DINO to localise an
-object and applies a deterministic geometric grasp estimator within the
-localised region. The third keeps the same Grounding DINO front end but replaces
-the geometric estimator with a lightweight supervised CNN.
+\section{研究设计与方法选择}
+本研究采用受控的数据集实验，评价开放词汇定位在二维抓取流程中的作用。系统分为三类：整幅 RGB 图像上的传统计算机视觉（computer vision, CV）基线；Grounding DINO 定位后连接确定性几何后端；以及保持同一定位前端和裁剪、改用轻量 CNN 的学习后端。该设计先比较“有无语义定位”，再在共同输入上比较“几何或学习回归”，避免把前端和后端变化混为一个结论。CNN 又分为单头与多头，以检验输出任务分解本身的影响。所有流程使用相同标注转换和 Cornell 判定规则。
 
-This design separates two questions that would otherwise be confounded:
-whether language-conditioned localisation improves over whole-image
-segmentation, and whether a learned grasp backend improves over a geometric
-backend when both receive the same object crop. All three systems use the same
-Cornell annotations and the same rectangle success criterion. The study is an
-offline perception evaluation; it does not claim that a successful rectangle
-necessarily produces a successful physical grasp.
+\section{Cornell 数据集与评价划分}
+实验使用 Cornell Grasping Dataset 的全部 885 幅 RGB 图像，每幅图含多个正抓取四点标注。共享加载器把四点转换为中心表示。虽然数据集包含深度，本研究统一使用 RGB，以保持输入模态不变。
 
-\section{Cornell Dataset and Evaluation Splits}
-The experiments use all 885 RGB images in the Cornell Grasping Dataset. Each
-sample contains one RGB image and multiple positively labelled grasp
-rectangles. The shared data loader parses the four corner points of every
-positive rectangle, associates them with the corresponding image, and converts
-them to a common centre representation for evaluation. Although depth images
-are available in Cornell, all three systems in this study use RGB so that input
-modality is held constant.
-
-For CNN development, Cornell directories 01--06 form the training set (600
-images), directories 07--08 form the validation set (200 images), and
-directories 09--10 form the fixed test subset (85 images). Directory membership
-is used to reduce direct overlap between development and test data. This is a
-project-specific split, not the standard image-wise or object-wise five-fold
-protocol reported in prior Cornell studies. It is therefore described as a
-\emph{fixed 85-sample test subset} rather than as a general unseen-object
-benchmark.
-
-A second evaluation uses an image-wise five-fold protocol following the
-definition used by \citet{lenz2015deep}. The 885 unique image identifiers are
-shuffled once with seed 42 and divided into five test folds of 177 images.
-Within each fold, the remaining 708 images are independently divided into 566
-training and 142 validation images. Every image is therefore tested exactly
-once. This protocol improves comparison with image-wise Cornell studies, but
-does not enforce object separation: different views of one physical object may
-appear in different roles.
+历史固定目录划分以 01--06 为训练集（600 幅）、07--08 为验证集（200 幅）、09--10 为测试集（85 幅），用于配对开发阶段产物；目录号不是物体 ID，因此该划分既非标准 image-wise，也不构成 object-wise。正式补充评价使用 seed 42 生成 image-wise 五折：每折 566 幅训练、142 幅验证、177 幅测试，五个测试折合计覆盖 885 幅且每图只测试一次。共同 manifest 的 SHA-256 为
+\texttt{b7d3e22a145f50add6d57a70bf0abb87b4b12ee674541deab0d7fee9a286bc2d}。Image-wise 允许同一物体的不同视角跨集合，因此只评价图像划分变化，不声称未见物体泛化。
 
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=\linewidth]{images/cornell_split_contact_sheet.png}
-  \caption{Representative Cornell images from the training, validation, and
-  fixed test directories. Twelve images were selected from each split, with
-  directory-balanced sampling where possible. The figure documents visible
-  object variation but cannot establish that the three splits have equal
-  difficulty.}
+  \caption{训练、验证与固定测试目录中的 Cornell 示例。每个划分抽取十二幅图并尽量平衡目录；该图只展示可见物体差异，不能证明各划分难度相等。}
   \label{fig:cornell-splits}
 \end{figure}
 
-\section{2D Grasp Rectangle Representation}
-A grasp is represented as
+\section{二维抓取矩形表示}
+抓取表示为
 \[
 g=(c_x,c_y,w,h,\theta),
 \]
-where $(c_x,c_y)$ is the rectangle centre, $w$ and $h$ are its dimensions, and
-$\theta$ is the in-plane gripper orientation. This follows the rectangle
-representation introduced for RGB-D grasp detection by
-\citet{jiang2011efficient} and used in subsequent Cornell work
-\citep{lenz2015deep,redmon2015real}. Multiple positive rectangles may be
-associated with an image. A prediction is compared with every positive
-annotation, and the annotation with the highest intersection over union (IoU)
-is used for scoring.
+其中 $(c_x,c_y)$ 为中心，$w,h$ 为矩形尺寸，$\theta$ 为图像平面内方向。该表示源自 Cornell 抓取研究\citep{jiang2011efficient,lenz2015deep,redmon2015real}。一个预测会与图中全部正标注比较，并以最高 IoU 的标注计分，从而承认一幅图可能有多个有效抓取。
 
-\section{Traditional Computer Vision Baseline}
-The baseline applies colour and brightness thresholding to the complete RGB
-image, cleans the binary mask, and extracts external contours. Contours smaller
-than 80 pixels or touching an eight-pixel image boundary are rejected. The
-remaining contour score favours large regions near the image centre. A
-minimum-area rotated rectangle supplies the object centre and principal axes.
-The grasp orientation is set perpendicular to the object's long axis. The
-predicted grasp width is $1.35$ times the object short side, clipped to
-20--120 pixels, and the height is $0.55$ times the short side, clipped to
-15--45 pixels.
+\section{传统计算机视觉基线}
+基线在整图上执行颜色与亮度阈值分割、掩膜清理和外轮廓提取。小于 80 像素或触及 8 像素边界的轮廓被排除，剩余候选按面积与靠近图像中心程度评分。最小面积旋转矩形给出中心和主轴，抓取方向取物体长轴的垂线。抓取宽度设为短边的 1.35 倍并截断至 20--120 像素，高度设为短边的 0.55 倍并截断至 15--45 像素。该方法确定且可解释，适合测量定位前端的贡献，但阈值与尺度是工程启发式而非学习到的可抓取性。
 
-This method is deliberately simple and deterministic. It provides a
-reproducible reference for measuring the value of localisation, but its
-thresholds and size rules are engineering heuristics rather than learned
-affordances.
+\section{Grounding DINO 定位前端}
+VLM 流程采用 Grounding DINO 开放集检测器\citep{liu2023grounding}。全部样本使用同一个通用提示 \texttt{small object}，框阈值和文本阈值均为 0.25，避免按样本提供类别答案。保留最高分有效框，并在进入后端前向四周扩大 10\%，以减少裁掉物体边缘的风险。保存的运行对 885/885 图像均返回框；这仅代表定位覆盖率，不代表框准确率。
 
-\section{Grounding DINO Localisation Front End}
-The two VLM-guided systems use Grounding DINO, an open-set detector that aligns
-text and image features \citep{liu2023grounding}. Every image receives the same
-generic prompt, \texttt{small object}, rather than a hand-written object name.
-The box and text thresholds are both 0.25. Using one prompt for the complete
-dataset avoids supplying sample-specific class information. The highest-ranked
-valid box is retained and expanded by 10\% before grasp estimation to reduce
-the risk of clipping the object boundary. The saved localisation run produced a
-box for all 885 evaluated images.
+\section{VLM 引导的几何后端}
+几何后端复用整图基线的分割与最小面积矩形，但把处理范围限制在扩大的 Grounding DINO 框内，并把局部坐标映射回原图。若无合适轮廓可使用框导出的回退矩形，正式运行未触发该回退。由于几何规则保持不变，整图基线与此流程的主要控制差异是定位范围，可直接服务研究问题一。
 
-\section{VLM-Guided Geometric Backend}
-The geometric backend reuses the baseline's mask and contour operations, but
-restricts the mask to the expanded Grounding DINO box. The largest suitable
-local contour is converted to a grasp with the same minimum-area rectangle and
-short-side rules used by the baseline. Consequently, the difference between
-these two systems is principally the localisation front end. A box-derived
-fallback is implemented for missing contours, although the evaluated run did
-not require it.
-
-\section{VLM-Guided Lightweight CNN Backend}
-The learned backend receives the same expanded VLM crop, resized to
-$224\times224$ RGB and normalised using ImageNet channel statistics. It predicts
-one local grasp because localisation has already isolated the target. The
-network contains four convolution--batch-normalisation--ReLU blocks with
-32, 64, 128, and 256 channels. Spatial resolution is reduced by a stride-two
-first convolution and max pooling. A fixed $7\times7$ average pool produces a
-256-dimensional vector, followed by fully connected regression layers.
+\section{VLM 引导的轻量 CNN 后端}
+CNN 接收同一 VLM crop，将其缩放为 $224\times224$ RGB，并按 ImageNet 通道统计量归一化。共享主干含四个卷积--批归一化--ReLU 块，通道数为 32、64、128、256；步长卷积与最大池化降采样，固定 $7\times7$ 平均池化产生 256 维向量。
 
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=\linewidth]{images/cnn_architecture.pdf}
-  \caption{Lightweight CNN grasp regression baseline used in this study. The
-  complete architecture is an engineering design for the controlled
-  comparison and is not proposed as a novel grasp network.}
+  \caption{本研究用于受控比较的轻量 CNN 抓取回归结构。该完整层级安排是项目工程设计，不作为新型抓取网络贡献。}
   \label{fig:cnn-architecture}
 \end{figure}
 
-Two regression variants share this convolutional trunk. The single-head model
-uses fully connected layers of 128 and 64 units before one six-dimensional
-output. The multi-head model instead uses separate centre, size, and orientation
-heads, each producing two values. Its losses are summed, with an additional
-0.1-weighted unit-norm penalty on the orientation pair. In both cases the
-flattened outputs are
-$[c_x,c_y,w,h,\sin(2\theta),\cos(2\theta)]$. The double-angle representation
-follows the symmetry-aware formulation used by GG-CNN
-\citep{morrison2018closing}: for a parallel-jaw gripper, orientations separated
-by 180 degrees are equivalent. The single-head architecture has 432,454
-trainable parameters. Its complete layer schedule was not copied from one
-publication. The light channel count and pooling were selected to limit
-overfitting and parameter growth on the small training splits. The rectangle
-task is grounded in prior Cornell work, while the exact four blocks, fully
-connected widths, and multi-head decomposition are project-specific engineering
-choices.
+单头模型通过 128、64 单元全连接层一次输出六维；多头模型共享主干，再以中心、尺寸和方向三个分头各输出二维。两者展开形式均为
+$[c_x,c_y,w,h,\sin(2\theta),\cos(2\theta)]$。双角度表示遵循 GG-CNN 的平行夹爪对称性\citep{morrison2018closing}；多头损失为三项回归损失之和，并对方向向量增加权重 0.1 的单位范数惩罚。单头共有 432,454 个可训练参数。四个块和分头方案未复制自某篇论文，而是为小数据、4\,GB GPU 和受控比较选择的轻量工程结构。
 
-\section{Training Protocol and Repeated Runs}
-For each image, the largest-area positive rectangle whose centre lies in the
-VLM crop supplies the regression target. Centre coordinates are normalised by
-crop dimensions; width and height are normalised by the crop diagonal.
-Optimisation uses Smooth L1 loss, Adam with learning rate $10^{-3}$ and weight
-decay $10^{-4}$, batch size 32, and at most 80 epochs. A
-ReduceLROnPlateau scheduler halves the learning rate after eight epochs without
-validation improvement. Training stops after 20 epochs without a lower
-validation loss, and the lowest-loss validation checkpoint is restored.
+\section{训练、重复实验与交叉验证}
+每幅图选择中心位于 crop 内且面积最大的正矩形作为回归目标；中心按 crop 宽高归一化，尺寸按 crop 对角线归一化。优化使用 Smooth L1、Adam、学习率 $10^{-3}$、权重衰减 $10^{-4}$、batch size 32，最多 80 epoch。ReduceLROnPlateau 在验证损失连续 8 epoch 无改善时减半学习率；20 epoch 无改善则早停并恢复最低验证损失 checkpoint。
 
-For the fixed directory split, each architecture is repeated five times with
-seeds 42--46. Every seed has separate weights, history, predictions, and summary
-files. Results are reported as population mean and standard deviation across
-the five runs. Strict deterministic PyTorch algorithms, deterministic cuDNN,
-a fixed DataLoader generator, and disabled cuDNN benchmarking are used.
+固定目录实验对单头和多头分别运行五个随机种子 42--46，保存独立权重、历史、预测和摘要，并报告五个随机种子的总体均值与总体标准差。PyTorch 确定性算法、cuDNN 确定模式、固定 DataLoader generator 和关闭 benchmark 用于降低非确定性。Image-wise 五折中，两种架构读取字节相同的 manifest，各折训练 seed 固定为 42；scheduler、早停与 checkpoint 只使用 142 幅验证图，177 幅测试图不参与模型选择。Pooled 指标合并 885 个折外预测，fold 均值与总体标准差另行报告。
 
-For image-wise cross-validation, both architectures read the byte-identical
-seed-42 manifest. The training seed is fixed at 42 in every fold so that fold
-membership is not confounded with a changing training seed. Checkpoint selection
-uses only the 142-image validation partition; the 177-image test partition is
-not used by the scheduler, early stopping, or checkpoint selection. Pooled
-metrics are calculated over the 885 out-of-fold predictions, and fold mean and
-population standard deviation are reported separately. The manifest SHA-256 is
-stored with every fold result.
-
-\section{Cornell Rectangle Evaluation}
-For prediction $P$ and ground-truth rectangle $G$, IoU is
+\section{Cornell 矩形评价}
+预测 $P$ 与真值 $G$ 的交并比为
 \[
 \operatorname{IoU}(P,G)=\frac{|P\cap G|}{|P\cup G|}.
 \]
-A prediction is successful if its best ground-truth match has
-$\operatorname{IoU}\geq0.25$ and its parallel-gripper angle error is at most
-$30^\circ$. Mean best IoU and mean best angle error are also reported, since
-the binary success rate can hide whether failure is caused mainly by position,
-size, or orientation. Whole-dataset results characterise the implemented
-pipelines. Backend comparison is restricted to the same 85 test images so that
-the geometric and CNN outputs are paired sample by sample.
+若最佳匹配满足 $\operatorname{IoU}\geq0.25$ 且平行夹爪角度误差不超过 $30^\circ$，则记为 rectangle success。论文同时报告最佳 IoU 和最佳角度误差均值，避免二值成功率掩盖位置、尺度或方向问题。固定 85 样本上的后端逐样本比较只使用同一测试列表。
 
-\section{Methodological Limitations}
-The contact sheet in Figure~\ref{fig:cornell-splits} cannot prove equal shape
-or difficulty distributions, so the fixed directory result must not be treated
-as evidence of general unseen-object performance. Image-wise five-fold
-evaluation removes dependence on one fixed test subset, but permits views of
-the same object to cross roles. Object-wise evaluation was not claimed because
-the available files do not provide an auditable mapping from all 885 images to
-physical object instances. Grounding DINO results may depend on prompt and
-threshold choices, despite the use of a single prompt here. The CNN is trained
-on small RGB-only partitions, while many high-performing grasp networks use
-depth and dense multi-grasp outputs. Finally, rectangle agreement is an offline
-proxy: the systems do not estimate depth, collision constraints, robot
-kinematics, or physical grasp success.
+\section{研究伦理（Research Ethics）}
+本项目无人类参与者、问卷或私人数据，不涉及知情同意与个人保密。Cornell 数据和公开预训练模型仅用于学术研究；相关论文、外部模型和任何引用或改编代码均应标明出处，项目自写结构不冒充文献方法。结果只从保存的 JSON、CSV 和预测产物写入论文，不把定位覆盖率夸大为定位质量，也不把离线矩形成功夸大为机器人成功。随机种子、环境版本、manifest 哈希和确定性设置支持审计；冻结大型 VLM、限制轻量后端和重复次数也控制了计算资源消耗。
+
+\section{方法局限}
+固定目录接触图不能证明难度相等；image-wise 五折仍可能有相邻视角信息泄漏。由于现有文件缺少可审计的 885 图像到物体实例映射，本文不报告 object-wise。Grounding DINO 可能对 prompt 和阈值敏感，但本研究未做提示搜索。CNN 只用小规模 RGB crop 并输出单矩形，而现代方法常利用 RGB-D 与密集多抓取图。最终评价是 offline metric，不估计深度、碰撞、运动学或接触稳定性，因此不等同于物理抓取。
 
 %==============================================================================
 \chapter{Results}
