@@ -114,3 +114,12 @@ def test_save_results_can_target_seed_specific_files(tmp_path: Path) -> None:
         "pcd0100,1",
     ]
     assert json.loads(summary_json.read_text(encoding="utf-8"))["seed"] == 42
+
+
+def test_reproducibility_configuration_returns_seeded_loader_generator() -> None:
+    generator = run_cnn_grasp.configure_reproducibility(1234)
+
+    assert generator.initial_seed() == 1234
+    assert torch.are_deterministic_algorithms_enabled()
+    assert torch.backends.cudnn.deterministic
+    assert not torch.backends.cudnn.benchmark

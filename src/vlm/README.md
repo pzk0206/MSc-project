@@ -65,7 +65,10 @@ conda run -n msc-grasp python src/vlm/run_cnn_grasp.py \
 
 多头模型共享四个卷积块，并分别使用中心、尺寸和方向回归头。三个参数组均
 采用 Smooth L1 损失，方向头另加权重为 0.1 的单位范数约束。推理阶段仍输出
-与原流程相同的 `[cx, cy, width, height, cos(2θ), sin(2θ)]` 六参数格式。
+与原流程相同的 `[cx, cy, width, height, sin(2θ), cos(2θ)]` 六参数格式。
+正式训练会固定 Python、NumPy、PyTorch、DataLoader 和 CUDA 算法；同一软件、
+硬件和 seed 下应产生相同训练历史与权重。跨 PyTorch/CUDA 版本仍不保证逐位
+一致，因此每批正式实验必须记录环境版本。
 
 输出位置：
 

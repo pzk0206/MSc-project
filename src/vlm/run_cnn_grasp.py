@@ -32,6 +32,8 @@ import argparse
 import csv
 import json
 import math
+import os
+import random
 import shutil
 import sys
 from dataclasses import dataclass
@@ -39,6 +41,10 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+
+# Required by strict deterministic CUDA matrix operations. Set it before any
+# model creates a CUDA context.
+os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
 
 # ——— isort / black 会把 torch 导入移到上面，这里保持注释结构清晰 ———
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -134,6 +140,24 @@ def configure_output_paths(output_dir: Path) -> OutputPaths:
     TRAIN_HISTORY_JSON = paths.training_history_json
     VISUALIZATION_DIR = paths.visualization_dir
     return paths
+
+
+def configure_reproducibility(seed: int):
+    """Seed all RNGs and require deterministic algorithms for this runtime."""
+    import torch
+
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+    torch.use_deterministic_algorithms(True)
+
+    generator = torch.Generator()
+    generator.manual_seed(seed)
+    return generator
 
 # ——— 训练超参数 ———
 CROP_SIZE = 224          # VLM crop resize 到的正方形尺寸
@@ -394,11 +418,7 @@ def train_model(
     import torch.nn as nn
     from torch.utils.data import DataLoader, Dataset
 
-    # 固定随机种子保证可复现
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
+    train_generator = configure_reproducibility(seed)
 
     class GraspCropDataset(Dataset):
         def __init__(self, samples: list[dict]):
@@ -417,7 +437,10 @@ def train_model(
             return s["tensor"], target_vec
 
     train_loader = DataLoader(
-        GraspCropDataset(train_data), batch_size=BATCH_SIZE, shuffle=True,
+        GraspCropDataset(train_data),
+        batch_size=BATCH_SIZE,
+        shuffle=True,
+        generator=train_generator,
     )
     val_loader = DataLoader(
         GraspCropDataset(val_data), batch_size=BATCH_SIZE, shuffle=False,

@@ -24,7 +24,10 @@ def _backbone_layers() -> list[nn.Module]:
         nn.BatchNorm2d(256),
         nn.ReLU(inplace=True),
         nn.MaxPool2d(2),
-        nn.AdaptiveAvgPool2d(1),
+        # The feature map is always 7x7 for the fixed 224x224 input.
+        # Fixed average pooling is mathematically equivalent here and has a
+        # deterministic CUDA backward implementation.
+        nn.AvgPool2d(kernel_size=7),
         nn.Flatten(),
     ]
 

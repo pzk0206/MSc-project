@@ -33,6 +33,10 @@
 - 确认正式评估范围：保留旧单头产物作为历史证据，在独立目录重跑单头和
   多头 seeds 42–46；验证物体实例分组后优先增加 object-wise 五折，再增加
   image-wise 五折。RGB-D 不纳入本月主实验，作为未来深度融合方向记录。
+- 发现仅设置 seed 仍会因 CUDA 非确定性导致同 seed 结果漂移；关闭 cuDNN
+  benchmark、启用严格确定性算法、固定 DataLoader generator，并将
+  AdaptiveAvgPool2d 换为数学等价的固定 `7×7` 平均池化。两次三轮 GPU
+  训练得到相同历史和逐位一致权重。
 
 ## 2026-07-23 — 文档结构整理
 

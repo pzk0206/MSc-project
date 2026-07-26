@@ -47,3 +47,14 @@ def test_multi_head_loss_exposes_each_component() -> None:
     }
     losses["total"].backward()
     assert predictions["centre"].grad is not None
+
+
+def test_models_avoid_cuda_nondeterministic_adaptive_average_pooling() -> None:
+    for model in (
+        SingleHeadCNNGraspRegressor(),
+        MultiHeadCNNGraspRegressor(),
+    ):
+        assert not any(
+            isinstance(module, torch.nn.AdaptiveAvgPool2d)
+            for module in model.modules()
+        )

@@ -857,3 +857,34 @@ LaTeX Error: Command `\Bbbk' already defined.
 
 从模板的 AMS 包列表移除重复的 `amssymb`，保留 `newtxmath` 和其他 AMS
 基础包。完整论文随后成功编译为 22 页 PDF，无 LaTeX fatal error。
+
+## 18. CUDA 同 seed 训练不可重复
+
+日期：2026-07-26
+
+### 18.1 现象
+
+多头 CNN 使用相同 seed 42、相同固定划分和同一 GPU 再次运行时，第一个
+epoch 的损失只相差约 `2e-5`，但早停后的固定测试成功率从 82.35% 漂移至
+76.47%。这说明原先的 `manual_seed` 设置只控制随机数，没有消除 CUDA 算法
+非确定性。
+
+### 18.2 根因
+
+- cuDNN benchmark 和卷积算法没有显式确定性约束；
+- DataLoader 没有使用独立的 seeded generator；
+- `AdaptiveAvgPool2d` 的 CUDA 反向传播不支持 PyTorch 严格确定性模式。
+
+### 18.3 修复与验证
+
+- 固定 Python、NumPy、PyTorch 和所有 CUDA RNG；
+- 设置 `CUBLAS_WORKSPACE_CONFIG=:4096:8`；
+- 关闭 `torch.backends.cudnn.benchmark`，启用 cuDNN deterministic 和
+  `torch.use_deterministic_algorithms(True)`；
+- 为训练 DataLoader 使用按实验 seed 初始化的 `torch.Generator`；
+- 将固定 `224×224` 输入下的 `AdaptiveAvgPool2d(1)` 替换为数学等价的
+  `AvgPool2d(7)`，保持参数量和可训练权重键不变。
+
+在 GTX 1650 Ti 上用相同 seed 连续运行两次三轮小型训练，训练历史完全相同，
+所有模型权重逐位一致。修复前生成的单头重跑和中断多头批次保留为诊断证据，
+不进入最终单头/多头公平对照。
