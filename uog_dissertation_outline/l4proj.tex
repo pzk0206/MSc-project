@@ -21,13 +21,13 @@
 %==============================================================================
 %% ABSTRACT
 \begin{abstract}
-机器人抓取检测需要从视觉观测中同时确定目标位置与可执行的夹爪几何。
+机器人抓取检测需要同时确定目标位置和夹爪几何，但传统整图分割易受背景干扰，开放词汇定位能否为轻量抓取后端提供可靠输入仍缺少受控证据。本研究使用 Cornell Grasping Dataset 的 885 幅 RGB 图像，比较传统计算机视觉、Grounding DINO 加几何后端、单头 CNN 与多头 CNN；以 Cornell 矩形指标评价，并通过五个随机种子和共同 image-wise 五折区分训练波动与架构差异。加入开放词汇定位后，几何流程成功率由 56.95\% 提升至 73.33\%。共同五折下，多头 CNN 的 pooled 成功率为 73.11\%，高于单头的 71.75\%，IoU 与角度误差也小幅改善。最大测得增益来自定位前端，而多头分解只带来有限提升；逐样本结果还显示 CNN 的空间回归与几何方向先验具有互补性。因此，模型选择不能只看单一成功率，还应结合误差维度与划分波动。研究表明，将语义定位与抓取估计模块化有助于诊断误差并替换后端；但结论限于 RGB-only、image-wise、小型单物体数据和离线矩形评价，不能等同于 object-wise 泛化或真实机器人抓取成功。
 \end{abstract}
 
 %==============================================================================
 %% ACKNOWLEDGEMENTS
-\chapter*{Acknowledgements}
-\todo{Add acknowledgements before final submission.}
+\chapter*{致谢}
+感谢导师 Dr Jan Paul Siebert 在研究设计、实验解释和论文写作方面提供的指导与反馈。感谢 University of Glasgow School of Computing Science 提供完成本项目所需的学习与研究环境。
 
 %==============================================================================
 %% EDUCATION REUSE CONSENT FORM
@@ -363,49 +363,33 @@ Figure~\ref{fig:backend-failures} 中，CNN-only 的 10/pcd1008、10/pcd1013、1
 %==============================================================================
 \begin{appendices}
 
-\chapter{Additional Material}
+\chapter{补充材料}
 
-\section{Additional Figures}
-The directory-balanced dataset contact sheet is provided in
-Figure~\ref{fig:cornell-splits}, and the category-selected paired backend
-examples are provided in Figure~\ref{fig:backend-failures}. The source records
-used to regenerate these figures are
-\path{representative_samples.csv} and
-\path{sample_comparison.csv}, respectively.
+\section{补充图}
+按目录平衡抽样的数据接触图见 Figure~\ref{fig:cornell-splits}，按结果类别选择的后端配对案例见 Figure~\ref{fig:backend-failures}。用于重新生成两幅图的源记录分别为 \path{representative_samples.csv} 和 \path{sample_comparison.csv}。
 
-\section{Additional Tables}
+\section{补充表}
 \begin{table}[htbp]
   \centering
-  \caption{Success rate by fixed project split. The CNN row is the final saved
-  seed-46 run and is used only for per-sample analysis.}
+  \caption{固定项目划分上的成功率。CNN 行为最后保存的 seed 46 运行，只用于逐样本分析。}
   \label{tab:split-success}
   \begin{tabular}{lrrr}
     \toprule
-    Method & Train (600) & Validation (200) & Test (85) \\
+    方法 & 训练（600） & 验证（200） & 测试（85） \\
     \midrule
-    Traditional CV & 53.17\% & 61.00\% & 74.12\% \\
-    VLM + geometric backend & 71.00\% & 79.50\% & 75.29\% \\
-    VLM + CNN, seed 46 & 73.83\% & 73.50\% & 80.00\% \\
+    传统 CV & 53.17\% & 61.00\% & 74.12\% \\
+    VLM + 几何后端 & 71.00\% & 79.50\% & 75.29\% \\
+    VLM + CNN，seed 46 & 73.83\% & 73.50\% & 80.00\% \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-\section{Configuration Details}
-The original localisation experiment environment was recorded as Conda
-environment \texttt{msc-grasp} with PyTorch 2.5.1+\texttt{cu121}. The formal
-deterministic CNN and cross-validation runs used PyTorch
-2.11.0+\texttt{cu128}. The Grounding DINO publisher was
-\texttt{IDEA-Research}, and the checkpoint was
-\texttt{grounding-dino-tiny}. It used the generic prompt
-\texttt{small object}, box threshold 0.25, and text threshold 0.25. The VLM box
-was expanded by 10\% before local estimation.
+\section{配置细节}
+原始定位实验记录在 Conda 环境 \texttt{msc-grasp} 中，使用 PyTorch 2.5.1+\texttt{cu121}；正式确定性 CNN 与交叉验证运行使用 PyTorch 2.11.0+\texttt{cu128}。Grounding DINO 发布者为 \texttt{IDEA-Research}，checkpoint 为 \texttt{grounding-dino-tiny}。通用提示为 \texttt{small object}，框阈值和文本阈值均为 0.25；进入局部估计前，VLM 框扩大 10\%。
 
-The CNN used crop size 224, batch size 32, learning rate $10^{-3}$, weight decay
-$10^{-4}$, a maximum of 80 epochs, and early-stopping patience 20. Repeated
-runs used seeds 42--46. Image-wise folds used a shared seed-42 manifest and
-training seed 42 in each fold.
+CNN crop 尺寸为 224，batch size 为 32，学习率为 $10^{-3}$，权重衰减为 $10^{-4}$，最多训练 80 epoch，早停 patience 为 20。重复运行使用 seed 42--46；image-wise 五折共享 seed 42 manifest，且每折训练 seed 均为 42。
 
-\subsection*{Core commands}
+\subsection*{核心命令}
 \begin{lstlisting}
 conda run -n msc-grasp python src/shared/check_cornell_dataset.py
 conda run -n msc-grasp python src/baseline_cv/run_cv_baseline.py
@@ -428,7 +412,7 @@ conda run -n msc-grasp python src/shared/analyze_cornell_splits.py
 conda run -n msc-grasp python src/vlm/analyze_backend_comparison.py
 \end{lstlisting}
 
-\subsection*{Primary output files}
+\subsection*{主要输出文件}
 \begin{lstlisting}
 data/processed/baseline_cv/cv_baseline_summary.json
 data/processed/vlm/grasp/vlm_assisted_grasp_summary.json
@@ -446,8 +430,7 @@ data/processed/vlm/backend_comparison/comparison_summary.json
 data/processed/vlm/backend_comparison/sample_comparison.csv
 \end{lstlisting}
 
-The old 73.11\% CNN single-run value is not reproduced from these files and is
-therefore excluded from the dissertation's primary evidence.
+旧的单头 CNN 单次运行 73.11\% 无法由上述产物复现，因此不进入论文主要证据；它与当前可审计的多头 image-wise 五折 73.11\% 不是同一结果。
 
 \end{appendices}
 
