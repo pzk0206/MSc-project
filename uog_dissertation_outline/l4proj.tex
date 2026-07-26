@@ -300,148 +300,40 @@ Table~\ref{tab:image-wise-cv} 使用字节相同的 image-wise manifest，两个
 这些结果的可辩护范围是 Cornell RGB 单目标、通用提示、当前实现与离线 rectangle metric。全数据五 seed 表用于训练波动和流程表征，固定 85 样本用于配对案例，image-wise 五折用于正式架构比较；三者不能互换。结果不证明对未见物体、杂乱开放世界或真实机器人执行的同等增益。
 
 %==============================================================================
-\chapter{General Discussion}
+\chapter{综合讨论}
 
-\section{Summary and Interpretation of Findings}
-The strongest result is the improvement obtained by adding the Grounding DINO
-front end to an otherwise similar geometric estimator. Whole-dataset success
-increases by 16.38 percentage points, from 56.95\% to 73.33\%, while missing
-predictions fall from 55 to zero. This indicates that, in the controlled
-Cornell setting, restricting segmentation and contour selection to a
-language-grounded region is more consequential than changing the local backend
-from geometry to the current CNN. The finding concerns this generic prompt and
-baseline; it does not establish that a VLM is necessary when a strong
-task-specific detector is available.
+\section{主要发现的解释}
+最明显的变化来自定位前端，而不是局部后端。保持颜色、轮廓和几何规则基本相同，仅把整图处理限制到 Grounding DINO 区域后，成功率增加 16.38 个百分点，55 个缺失预测降为零；之后把几何改为当前 CNN，提升幅度更小。一个合理解释是，整图基线首先受“选择了错误区域”限制，VLM crop 排除了部分背景和干扰轮廓，使后端面对更简单的局部问题。但本研究没有用人工框做上限实验，也未比较强任务专用检测器，所以不能断言 VLM 是唯一或必要方案。
 
-The multi-head learned backend produces the highest deterministic whole-dataset
-mean IoU ($0.4640\pm0.0165$), and its image-wise out-of-fold IoU is 0.4580
-compared with 0.4390 for the single-head model. This suggests that separating
-centre, size, and orientation objectives improves spatial regression. In
-contrast, the geometric backend has the lowest mean angle error
-($14.81^\circ$ over all images and $12.01^\circ$ on the fixed test subset).
-Its rule of orienting a grasp perpendicular to the object long axis is
-therefore still a useful prior. These properties should not be collapsed into
-the binary Cornell score: CNN improvements are mainly spatial, whereas
-geometry remains more stable in orientation.
+CNN 与几何的优势落在不同误差维度。单头和多头 CNN 的平均 IoU 较高，说明数据驱动回归更能贴合标注的中心和尺度；几何后端的角度误差更低，说明“夹爪垂直于物体长轴”在 Cornell 单物体图像中仍是有效先验。多头把中心、尺寸与方向分开优化后，image-wise pooled 三项指标均改善，可能减少不同量纲目标在共同输出层中的干扰。然而增益只有 1.36 个百分点，且 fold 0 反向变化，因此它是有限的受控优势，不是普遍结构定律。
 
-The paired test outcomes reinforce this interpretation. Sixteen images are
-successful only for the CNN and 12 only for geometry. These 28 discordant cases
-show that the two backends are complementary rather than ordered versions of
-one another. A hybrid that learns centre and size while regularising direction
-with a geometric prior is a plausible next experiment, but the current evidence
-does not show that it would improve the combined criterion.
+固定 85 样本中仅 CNN 成功 16 幅、仅几何成功 12 幅，显示二者互补，而不是一个后端完全包含另一个。由此可提出“学习中心和尺度、用几何约束方向”的混合后端假设，但当前实验并未实现它。固定子集本身也偏易：非学习基线在测试目录明显高于训练目录，所以较高测试值不能解释为 object-wise 泛化。
 
-Finally, the apparent strength of the 85-image test result is constrained by
-the split audit. The non-learning traditional baseline rises from 53.17\% on
-training directories to 74.12\% on test directories. Since model generalisation
-cannot cause this increase, directory composition or difficulty is a credible
-confounder. The test result is therefore evidence about a fixed paired subset,
-not a general object-wise generalisation claim.
+\section{与既有文献的关系}
+本项目沿用 Jiang 的二维矩形和 Cornell 判定框架\citep{jiang2011efficient}。Lenz 的 RGB-D 两阶段候选评分证明了深度特征与候选重排的价值，并同时报告 image-wise/object-wise\citep{lenz2015deep}；Redmon 则把搜索改为全局直接回归和网格多抓取\citep{redmon2015real}。本研究的轻量 CNN 与 Redmon 同属“图像到矩形”范式，但输入是 Grounding DINO 产生的 RGB crop，fold 成员也由本项目生成，因此数值只能有限可比。
 
-\section{Relationship to Previous Literature}
-The project follows the established Cornell rectangle formulation
-\citep{jiang2011efficient} and its IoU-and-angle success criterion, but its
-reported values are not directly interchangeable with standard Cornell
-leaderboards. Lenz et al.\ use RGB-D input and image-wise/object-wise evaluation
-\citep{lenz2015deep}; Redmon and Angelova also include depth and report standard
-five-fold results for global and multi-grasp regression
-\citep{redmon2015real}. Kumra and Kanan employ a substantially larger RGB-D
-ResNet-based model \citep{kumra2017robotic}. This study now reports an
-image-wise five-fold result, but still differs through its RGB VLM crops,
-single-rectangle output, independently generated fold membership, and absence
-of an auditable object-wise split.
+GG-CNN 以深度图密集预测质量、方向和宽度\citep{morrison2018closing}，GR-ConvNet 与 Gaussian-guided 网络继续发展像素级多抓取输出\citep{kumra2020antipodal,li2022gaussian}。这些方法能保留多个局部候选，表达力高于本项目的单矩形回归；同时使用深度、增强和不同协议。它们的高 Cornell 数字用于说明技术方向，而不能与当前 RGB-only 结果直接形成排行榜。其物理实验还包含标定、运动、接触与恢复，Cornell rectangle success 不等同于物理抓取成功。
 
-More recent work also changes the output representation. GG-CNN predicts grasp
-quality, angle, and width at every depth pixel
-\citep{morrison2018closing}; GR-ConvNet and Gaussian-guided generative networks
-continue this dense grasp-map direction
-\citep{kumra2020antipodal,li2022gaussian}. Their higher reported Cornell
-accuracies contextualise the limited capacity of a single global rectangle
-regressor, but do not form a fair numerical ranking because input modalities,
-splits, augmentation, and output multiplicity differ. Park et al.'s 2018
-high-resolution FCNN preprint is additionally excluded from the main comparison
-because that version was withdrawn and superseded.
+Grounding DINO 的原始贡献是文本条件开放集检测\citep{liu2023grounding}，本项目只把它当作可替换定位前端，而不把它称为抓取模型。Vuong 的 Language-driven Grasp Detection 在复杂场景中用具体语言指令条件化生成抓取\citep{vuong2024language}；当前实验对所有单目标图固定 \texttt{small object}，没有测试语言指定部位或多目标消歧。两者共享“语言参与目标选择”的动机，但任务、数据和评价均不同。
 
-The language-conditioned role is closer in motivation to recent
-language-driven grasp detection \citep{vuong2024language}, but the tasks remain
-different. Grasp-Anything++ conditions grasp generation on object-specific
-instructions in complex scenes, whereas the present prompt is the same generic
-\texttt{small object} phrase for single-object Cornell images. The contribution
-here is consequently a modular evaluation of open-vocabulary localisation as a
-front end, not a new language-driven grasp benchmark.
+\section{失败案例与误差来源}
+VLM + geometry 的 236 个失败可按指标分为 126 个仅 IoU 失败、45 个仅角度失败和 65 个同时失败。这些是观测类别，不自动等于原因。Grounding DINO 的 100\% 定位覆盖率只表示每图返回框；宽松、偏移甚至错误框仍可计入覆盖，所以不能把覆盖率当定位精度。
 
-Offline rectangle accuracy must also be separated from physical grasp success.
-Physical experiments reported by GG-CNN and GR-ConvNet include sensing,
-calibration, motion, contact, and recovery. A rectangle passing the Cornell
-metric verifies only image-plane agreement with an annotation; it cannot be
-compared directly with a percentage of objects successfully lifted by a robot.
+Figure~\ref{fig:backend-failures} 中，CNN-only 的 10/pcd1008、10/pcd1013、10/pcd1005 和 10/pcd1012，几何 IoU 为 0.145--0.206，CNN 为 0.489--0.627；可确认的是学习矩形更接近标注范围，短边规则低估尺度只是待验证解释。Geometry-only 中，10/pcd1003 的 CNN IoU 仅 0.127，而 10/pcd1001、09/pcd0945、09/pcd0947 的 CNN 角度超过 $30^\circ$，所以不能给四例分配同一原因。
 
-\section{Failure Case Analysis}
-The earlier whole-dataset geometric analysis separates its 236 failures into
-126 IoU-only failures, 45 angle-only failures, and 65 failures of both
-conditions. These are observed metric categories, not automatically causal
-diagnoses. In particular, a 100\% localisation coverage rate means only that
-Grounding DINO returned a box; it does not prove that every box tightly and
-correctly localised the object.
+共同失败也不一致。10/pcd1000 的 VLM 框接近整图且两后端 IoU 为零，上游定位可能参与失败；09/pcd0918 的两种角度误差均低于 $4^\circ$，但 IoU 略低于 0.25，是尺度/位置边界案例；10/pcd1016 与 10/pcd1024 的 CNN IoU 足够而角度误差超过 $74^\circ$，观测瓶颈明确在方向。案例分解支持将空间与方向分别诊断，但仍不能从少量图片推断总体因果比例。
 
-The representative cases in Figure~\ref{fig:backend-failures} were chosen by a
-fixed metric rule. For CNN-only samples 10/pcd1008, 10/pcd1013, 10/pcd1005, and
-10/pcd1012, the geometric rectangles have IoU between 0.145 and 0.206, while
-the CNN rectangles reach 0.489--0.627. The observed result is that the learned
-rectangles better match annotated extent. A possible explanation is that the
-contour short-side heuristic underestimates grasp size on these objects;
-confirming that explanation would require an explicit component ablation.
+\section{实践与理论意义}
+工程上，开放词汇检测器可以作为可替换模块缩小轻量抓取估计器的搜索区域，尤其适用于类别名称变化或缺少封闭集检测器的场景。共享 crop 也使后端可以独立升级。结果同时提示不应丢弃简单几何信息：学习回归与解析方向先验解决不同样本，混合方案值得正式消融。
 
-The geometry-only row contains two distinct observations. On 10/pcd1003 the
-CNN has low IoU (0.127), whereas on 10/pcd1001, 09/pcd0945, and 09/pcd0947 its
-angle error exceeds the $30^\circ$ threshold. The latter is consistent with
-unstable orientation regression, while the former is a spatial error. It would
-be inaccurate to assign one common cause to all four cases.
+理论上，本研究支持模块化误差观：语言 grounding 处理“选择哪个目标”，抓取后端处理“该区域怎样夹持”。语义定位与 grasp affordance 不等同，前一模块覆盖完整并不保证后一模块正确。这一边界对基础模型机器人研究很重要，因为 VLM 可以改善感知管线，却没有因此自动获得接触力学、可达性或碰撞知识。
 
-The shared failures are similarly heterogeneous. Sample 10/pcd1000 has a
-near-full-image VLM box and zero IoU for both backends, so poor localisation is
-a plausible upstream contributor. Sample 09/pcd0918 is instead a borderline
-size/position failure: both angle errors are below $4^\circ$, but both IoUs are
-just below 0.25. Samples 10/pcd1016 and 10/pcd1024 have adequate CNN IoU but
-angle errors above $74^\circ$, isolating orientation as the observed failure.
-This case-level separation motivates treating centre/size and direction as
-distinct learning targets.
+若进入部署，还需深度恢复、相机到机器人标定、预抓取轨迹、近距离重估、夹爪闭合和成功检测。当前二维输出应被视为这些阶段的输入，而非完整机器人系统。
 
-\section{Practical and Theoretical Implications}
-Practically, an open-vocabulary detector can serve as a replaceable perception
-module that narrows the search space for a lightweight grasp estimator. This is
-useful when object names vary or a closed-set detector is unavailable. The
-results also argue for retaining simple geometric information: learned spatial
-regression and analytic orientation priors solve different subsets of cases.
+\section{研究局限}
+第一，研究只用 Cornell 小型单物体数据，不能代表杂乱开放世界。第二，输入为 RGB-only，未利用深度恢复物理尺度和表面结构。第三，image-wise 允许相邻视角跨集合，权威物体映射缺失使 object-wise 暂不可审计。第四，固定 85 样本较小且难度偏置明显。第五，通用 prompt、框阈值和 10\% 扩张未做敏感性实验，885/885 定位覆盖率也不是定位质量。
 
-Theoretically, the experiment supports a modular account of error. Language
-grounding addresses target selection, while grasp geometry addresses
-affordance. Strong coverage in the first module does not imply success in the
-second. This distinction is important when evaluating foundation models in
-robotics: semantic localisation can improve a pipeline without itself learning
-contact mechanics or manipulation.
-
-For deployment, the next system stages would be depth recovery, camera-to-robot
-calibration, pre-grasp planning, close-range re-estimation, gripper closure, and
-success detection. The current offline output is best understood as an input to
-those stages, not as a complete robotic grasping system.
-
-\section{Limitations}
-The study has seven principal limitations. First, evaluation uses only Cornell,
-whose mostly uncluttered tabletop images do not represent open-world scenes.
-Second, the paired test subset contains only 85 images, so four additional
-successes correspond to 4.71 percentage points. Third, image-wise folds permit
-views of one physical object to cross roles, while the missing authoritative
-instance mapping prevents an auditable object-wise result. Fourth, both
-backends emit only one grasp and cannot represent multiple valid grasp modes.
-
-Fifth, Grounding DINO's 885/885 coverage is not a localisation-accuracy metric;
-a loose or incorrect box can still count as detected. Sixth, the study performs
-no physical robot execution, so it does not measure collision-free reachability,
-gripper contact, lifting, or recovery. Seventh, each image-wise fold uses only
-566 training images; deterministic five-seed results and fold statistics both
-show non-zero variation. The lightweight engineering choices should therefore
-be interpreted as a baseline rather than a settled architecture.
+第六，几何与 CNN 都只输出单矩形，不能表示一物多抓取。第七，评价仅为 offline metric，无真实机器人、碰撞、接触或抬升验证。第八，各 fold 只有 566 幅训练图，4\,GB GPU 限制模型容量与搜索范围；五 seed 和 fold 统计均显示非零波动。因此，当前 CNN 应被理解为受控轻量基线，多头结果是局部证据，而非最新方法或最终架构。
 
 %==============================================================================
 \chapter{Conclusion}
