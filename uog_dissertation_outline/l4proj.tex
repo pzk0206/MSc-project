@@ -3,12 +3,16 @@
 \documentclass{l4proj}
 
 \usepackage{pdfpages}
+\usepackage{xeCJK}
+\setCJKmainfont{Noto Serif CJK SC}
+\setCJKsansfont{Noto Sans CJK SC}
+\setCJKmonofont{Noto Sans Mono CJK SC}
 
 \begin{document}
 
 %==============================================================================
 %% METADATA
-\title{Evaluating Open-Vocabulary Vision-Language Models for 2D Robotic Grasp Detection}
+\title{开放词汇视觉语言模型在二维机器人抓取检测中的评估}
 \author{Pang Zhenkun}
 \date{MSc Robotics \& Artificial Intelligence\\Supervisor: Dr Jan Paul Siebert\\2026}
 
@@ -17,7 +21,7 @@
 %==============================================================================
 %% ABSTRACT
 \begin{abstract}
-    \todo{300--400 words. Summarise: (1) research background and problem, (2) methodology, including Cornell dataset, VLM grounding, and geometric grasp estimation, (3) key findings, and (4) implications or outcomes. Write this after the experiments are complete.}
+机器人抓取检测需要从视觉观测中同时确定目标位置与可执行的夹爪几何。
 \end{abstract}
 
 %==============================================================================
