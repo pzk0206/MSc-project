@@ -3,9 +3,9 @@
 ## 比较口径
 
 本项目采用 Cornell rectangle metric：预测矩形与任一真值矩形的 IoU 大于
-`0.25`，且夹爪方向误差小于 `30°` 时视为成功。当前目录
-`01–06/07–08/09–10` 划分不是文献中的标准 image-wise 或 object-wise 五折，
-且输入仅为 Grounding DINO 裁剪后的 RGB。因此，下表中的百分比主要用于定位
+`0.25`，且夹爪方向误差小于 `30°` 时视为成功。本项目现已同时报告固定目录
+划分和 image-wise 五折，但输入仅为 Grounding DINO 裁剪后的 RGB，且具体
+fold 成员不是来自其他论文未公开的清单。因此，下表中的百分比主要用于定位
 技术发展，而不能组成严格的排行榜。
 
 可比性标签含义：
@@ -15,7 +15,7 @@
 - **不可直接比较**：数据集、任务或物理执行指标不同。
 
 本矩阵没有将任何文献标为“直接可比”，因为没有一项同时复现本项目的 RGB
-VLM crop、目录划分和单矩形评估协议。
+VLM crop、单矩形输出和完全相同的 fold 成员。
 
 ## 统一比较矩阵
 
@@ -30,6 +30,8 @@ VLM crop、目录划分和单矩形评估协议。
 | Kumra et al. (2020), GR-ConvNet | 生成式残差抓取网络 | RGB-D（n-channel） | Cornell、Jacquard；物理实验 | Cornell image-wise / object-wise | 像素级质量、角度和宽度图 | Cornell rectangle metric；Jacquard；物理成功率 | Cornell `97.7% / 96.6%`；Jacquard `94.6%`（Results/Table I） | Cornell 为**有限可比**；Jacquard和物理结果**不可直接比较** |
 | Li et al. (2022) | Gaussian-guided 密集抓取 | RGB-D | Cornell、Jacquard | Cornell image-wise / object-wise | 像素级生成式抓取图 | Cornell rectangle metric | Cornell `99.0% / 98.3%`；Jacquard `95.9%`（Table I） | Cornell 为**有限可比**；Jacquard**不可直接比较** |
 | Vuong et al. (2024) | 语言驱动抓取检测 | RGB + 自然语言 | Grasp-Anything++ | 大规模合成/开放词汇协议 | 条件扩散式语言目标抓取 | 该论文的语言驱动数据集指标 | 数据集包含超过 `1M` 图像、`3M` 物体和 `10M` 指令（Abstract/Section 3）；不报告本项目 Cornell 目录指标 | **不可直接比较**：任务、数据和评价协议均不同 |
+| 本项目单头 CNN | VLM crop 单矩形回归 | RGB | Cornell | image-wise 五折，seed 42 manifest | 单个抓取矩形 | Cornell rectangle metric | pooled `71.75%`，IoU `0.4390`，角度 `17.74°` | 项目基线 |
+| 本项目多头 CNN | 共享主干、中心/尺寸/方向分头回归 | RGB | Cornell | 与单头字节相同的 image-wise manifest | 单个抓取矩形 | Cornell rectangle metric | pooled `73.11%`，IoU `0.4580`，角度 `17.40°` | 与本项目单头**直接成对可比**；与 RGB-D 文献仅有限可比 |
 
 ## 对本项目最有用的技术脉络
 
@@ -53,7 +55,8 @@ VLM crop、目录划分和单矩形评估协议。
 > Reported Cornell accuracy has increased substantially as the field moved from
 > candidate scoring and global regression toward RGB-D dense generative
 > prediction. These figures are only contextual for our system: our RGB-only
-> VLM crops and directory-based split differ from the standard protocols.
+> VLM crops, single-rectangle output, and project-generated fold membership
+> differ from prior protocols.
 > Accordingly, we treat the CNN as a lightweight controlled backend rather than
 > a state-of-the-art grasp detector.
 

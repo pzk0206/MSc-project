@@ -96,7 +96,7 @@ Cornell annotations and the same rectangle success criterion. The study is an
 offline perception evaluation; it does not claim that a successful rectangle
 necessarily produces a successful physical grasp.
 
-\section{Cornell Dataset and Fixed Directory Split}
+\section{Cornell Dataset and Evaluation Splits}
 The experiments use all 885 RGB images in the Cornell Grasping Dataset. Each
 sample contains one RGB image and multiple positively labelled grasp
 rectangles. The shared data loader parses the four corner points of every
@@ -113,6 +113,15 @@ project-specific split, not the standard image-wise or object-wise five-fold
 protocol reported in prior Cornell studies. It is therefore described as a
 \emph{fixed 85-sample test subset} rather than as a general unseen-object
 benchmark.
+
+A second evaluation uses an image-wise five-fold protocol following the
+definition used by \citet{lenz2015deep}. The 885 unique image identifiers are
+shuffled once with seed 42 and divided into five test folds of 177 images.
+Within each fold, the remaining 708 images are independently divided into 566
+training and 142 validation images. Every image is therefore tested exactly
+once. This protocol improves comparison with image-wise Cornell studies, but
+does not enforce object separation: different views of one physical object may
+appear in different roles.
 
 \begin{figure}[htbp]
   \centering
@@ -180,9 +189,8 @@ $224\times224$ RGB and normalised using ImageNet channel statistics. It predicts
 one local grasp because localisation has already isolated the target. The
 network contains four convolution--batch-normalisation--ReLU blocks with
 32, 64, 128, and 256 channels. Spatial resolution is reduced by a stride-two
-first convolution and max pooling. Adaptive global average pooling (GAP)
-produces a 256-dimensional vector, followed by fully connected layers of 128
-and 64 units and a six-dimensional output.
+first convolution and max pooling. A fixed $7\times7$ average pool produces a
+256-dimensional vector, followed by fully connected regression layers.
 
 \begin{figure}[htbp]
   \centering
@@ -193,16 +201,22 @@ and 64 units and a six-dimensional output.
   \label{fig:cnn-architecture}
 \end{figure}
 
-The outputs are
+Two regression variants share this convolutional trunk. The single-head model
+uses fully connected layers of 128 and 64 units before one six-dimensional
+output. The multi-head model instead uses separate centre, size, and orientation
+heads, each producing two values. Its losses are summed, with an additional
+0.1-weighted unit-norm penalty on the orientation pair. In both cases the
+flattened outputs are
 $[c_x,c_y,w,h,\sin(2\theta),\cos(2\theta)]$. The double-angle representation
 follows the symmetry-aware formulation used by GG-CNN
 \citep{morrison2018closing}: for a parallel-jaw gripper, orientations separated
-by 180 degrees are equivalent. The architecture has 432,454 trainable
-parameters. Its complete layer schedule was not copied from one publication.
-The light channel count and GAP were selected to limit overfitting and parameter
-growth on the 600-image training split. The rectangle task is grounded in prior
-Cornell work, while the exact four blocks and fully connected widths are
-project-specific engineering choices.
+by 180 degrees are equivalent. The single-head architecture has 432,454
+trainable parameters. Its complete layer schedule was not copied from one
+publication. The light channel count and pooling were selected to limit
+overfitting and parameter growth on the small training splits. The rectangle
+task is grounded in prior Cornell work, while the exact four blocks, fully
+connected widths, and multi-head decomposition are project-specific engineering
+choices.
 
 \section{Training Protocol and Repeated Runs}
 For each image, the largest-area positive rectangle whose centre lies in the
@@ -214,12 +228,20 @@ ReduceLROnPlateau scheduler halves the learning rate after eight epochs without
 validation improvement. Training stops after 20 epochs without a lower
 validation loss, and the lowest-loss validation checkpoint is restored.
 
-The experiment is repeated five times with seeds 42--46. For each run, the
-selected checkpoint is evaluated over all 885 images and separately on
-directories 09--10. Results are reported as population mean and standard
-deviation across the five runs. The saved per-sample prediction file belongs to
-the final run (seed 46) and is used only for matched-sample and qualitative
-analysis.
+For the fixed directory split, each architecture is repeated five times with
+seeds 42--46. Every seed has separate weights, history, predictions, and summary
+files. Results are reported as population mean and standard deviation across
+the five runs. Strict deterministic PyTorch algorithms, deterministic cuDNN,
+a fixed DataLoader generator, and disabled cuDNN benchmarking are used.
+
+For image-wise cross-validation, both architectures read the byte-identical
+seed-42 manifest. The training seed is fixed at 42 in every fold so that fold
+membership is not confounded with a changing training seed. Checkpoint selection
+uses only the 142-image validation partition; the 177-image test partition is
+not used by the scheduler, early stopping, or checkpoint selection. Pooled
+metrics are calculated over the 885 out-of-fold predictions, and fold mean and
+population standard deviation are reported separately. The manifest SHA-256 is
+stored with every fold result.
 
 \section{Cornell Rectangle Evaluation}
 For prediction $P$ and ground-truth rectangle $G$, IoU is
@@ -235,15 +257,18 @@ pipelines. Backend comparison is restricted to the same 85 test images so that
 the geometric and CNN outputs are paired sample by sample.
 
 \section{Methodological Limitations}
-The directory split is not a standard Cornell five-fold protocol, and the
-contact sheet in Figure~\ref{fig:cornell-splits} cannot prove equal shape or
-difficulty distributions. The fixed test subset must therefore not be treated
-as evidence of general unseen-object performance. Grounding DINO results may
-depend on prompt and threshold choices, despite the use of a single prompt
-here. The CNN is trained on a small RGB-only dataset, while many high-performing
-grasp networks use depth and dense multi-grasp outputs. Finally, rectangle
-agreement is an offline proxy: the systems do not estimate depth, collision
-constraints, robot kinematics, or physical grasp success.
+The contact sheet in Figure~\ref{fig:cornell-splits} cannot prove equal shape
+or difficulty distributions, so the fixed directory result must not be treated
+as evidence of general unseen-object performance. Image-wise five-fold
+evaluation removes dependence on one fixed test subset, but permits views of
+the same object to cross roles. Object-wise evaluation was not claimed because
+the available files do not provide an auditable mapping from all 885 images to
+physical object instances. Grounding DINO results may depend on prompt and
+threshold choices, despite the use of a single prompt here. The CNN is trained
+on small RGB-only partitions, while many high-performing grasp networks use
+depth and dense multi-grasp outputs. Finally, rectangle agreement is an offline
+proxy: the systems do not estimate depth, collision constraints, robot
+kinematics, or physical grasp success.
 
 %==============================================================================
 \chapter{Results}
@@ -269,10 +294,12 @@ processing rules.
 Table~\ref{tab:main-results} reports the primary whole-dataset comparison. The
 VLM-guided geometric system improves success from 56.95\% to 73.33\%, an
 absolute gain of 16.38 percentage points. It also reduces mean angle error by
-14.81 degrees. The five-run CNN mean is 1.18 points above the geometric
-backend and has higher mean IoU, but its mean angle error is 1.68 degrees
-larger. These results suggest that localisation supplies the largest measured
-gain, while the two local backends offer different strengths.
+14.81 degrees. Across deterministic five-seed runs, the single-head CNN is
+1.22 points above the geometric backend and the multi-head CNN is 2.26 points
+above it. The multi-head model also has the highest mean IoU, while the
+geometric backend retains the lowest angle error. These results suggest that
+localisation supplies the largest measured gain, while the local backends offer
+different strengths.
 
 \begin{table}[htbp]
   \centering
@@ -286,29 +313,29 @@ gain, while the two local backends offer different strengths.
     \midrule
     Traditional CV baseline & 504/885 & 56.95\% & 0.3360 & $29.62^\circ$ \\
     VLM + geometric backend & 649/885 & 73.33\% & 0.4182 & $14.81^\circ$ \\
-    VLM + CNN, five runs & --- & $74.51\%\pm1.38\%$ &
-      $0.4510\pm0.0081$ & $16.49^\circ\pm0.72^\circ$ \\
+    VLM + single-head CNN, five runs & --- & $74.55\%\pm1.77\%$ &
+      $0.4535\pm0.0149$ & $16.62^\circ\pm0.83^\circ$ \\
+    VLM + multi-head CNN, five runs & --- & $75.59\%\pm1.90\%$ &
+      $0.4640\pm0.0165$ & $15.20^\circ\pm0.29^\circ$ \\
     \bottomrule
   \end{tabular}}
 \end{table}
 
 The earlier 73.11\% single-run CNN figure is excluded because its independent
-JSON and per-sample CSV were overwritten by later repeated runs. The aggregate
-five-run file is the provenance source for the CNN row in
-Table~\ref{tab:main-results}.
+JSON and per-sample CSV were overwritten by later repeated runs. The
+deterministic, seed-isolated aggregate files are the provenance sources for the
+two CNN rows in Table~\ref{tab:main-results}.
 
 \subsection{Fixed 85-sample test subset (directories 09--10)}
 Table~\ref{tab:fixed-test} compares the two VLM-guided backends on the same
-85 images. The seed-46 CNN succeeds on 68 images, four more than the geometric
-backend, and attains higher IoU. The geometric method has substantially lower
-angle error. Across five CNN runs, test success is
-$82.35\%\pm4.53\%$, showing that the single saved run is not the most favourable
-run but also that performance varies with training seed.
+85 images. The two deterministic CNN variants have the same mean success rate,
+but the multi-head model has a smaller success-rate standard deviation and
+higher mean IoU. The geometric method has substantially lower angle error.
 
 \begin{table}[htbp]
   \centering
   \caption{Results on the fixed 85-sample test subset (directories 09--10).
-  The saved CNN row is seed 46; the final row summarises all five CNN runs.}
+  CNN values are mean $\pm$ population standard deviation over seeds 42--46.}
   \label{tab:fixed-test}
   \resizebox{\linewidth}{!}{%
   \begin{tabular}{lrrrr}
@@ -316,12 +343,49 @@ run but also that performance varies with training seed.
     Method & Successful & Success rate & Mean best IoU & Mean angle error \\
     \midrule
     VLM + geometric backend & 64/85 & 75.29\% & 0.3921 & $12.01^\circ$ \\
-    VLM + CNN, seed 46 & 68/85 & 80.00\% & 0.4562 & $21.01^\circ$ \\
-    VLM + CNN, five runs & --- & $82.35\%\pm4.53\%$ &
-      $0.4602\pm0.0200$ & $18.73^\circ\pm2.38^\circ$ \\
+    VLM + single-head CNN & --- & $80.47\%\pm5.19\%$ &
+      $0.4694\pm0.0343$ & $18.23^\circ\pm1.15^\circ$ \\
+    VLM + multi-head CNN & --- & $80.47\%\pm3.38\%$ &
+      $0.5075\pm0.0315$ & $18.93^\circ\pm1.82^\circ$ \\
     \bottomrule
   \end{tabular}}
 \end{table}
+
+\subsection{Image-wise five-fold cross-validation}
+Table~\ref{tab:image-wise-cv} reports out-of-fold evaluation using the shared
+manifest. The single-head model succeeds on 635 images and the multi-head model
+on 647. Multi-head regression therefore adds 12 successes, or 1.36 percentage
+points, raises mean IoU by 0.0190, and reduces mean angle error by
+$0.34^\circ$. Because all folds contain 177 images, the pooled success rate
+equals the unweighted fold mean; the uncertainty shown is the population
+standard deviation across the five folds, not across training seeds.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Image-wise five-fold results. Central values are pooled over 885
+  out-of-fold predictions; $\pm$ values are population standard deviations
+  across five equally sized folds.}
+  \label{tab:image-wise-cv}
+  \resizebox{\linewidth}{!}{%
+  \begin{tabular}{lrrrr}
+    \toprule
+    Architecture & Successful & Success rate & Mean best IoU &
+      Mean angle error \\
+    \midrule
+    Single-head CNN & 635/885 & $71.75\%\pm2.02\%$ &
+      $0.4390\pm0.0190$ & $17.74^\circ\pm1.23^\circ$ \\
+    Multi-head CNN & 647/885 & $73.11\%\pm2.98\%$ &
+      $0.4580\pm0.0191$ & $17.40^\circ\pm1.13^\circ$ \\
+    \bottomrule
+  \end{tabular}}
+\end{table}
+
+These values are lower than the five-seed whole-dataset means because the
+cross-validation prediction for each image comes only from a model for which
+that image was held out. They support a modest and consistent advantage for
+the multi-head decomposition under the same RGB crops and fold membership.
+They remain only finitely comparable with prior RGB-D results, and they do not
+establish unseen-object generalisation.
 
 \section{Qualitative Results}
 Figure~\ref{fig:backend-failures} shows paired outputs selected from three
@@ -361,6 +425,13 @@ this complementarity. A future hybrid could retain the geometric orientation
 prior while learning centre and scale, but that hypothesis is not tested in the
 current results.
 
+The image-wise five-fold comparison supplies a cleaner architecture ablation.
+Both models use identical folds, training seed, crops, and optimisation rules;
+only the regression-head organisation changes. The multi-head model improves
+all three pooled metrics, but the 1.36-point success gain is modest and its
+fold-to-fold success variation is larger. This supports the multi-head model as
+the stronger controlled backend, not as a new state-of-the-art detector.
+
 The test subset scores must be interpreted alongside the split audit. Because
 even the traditional baseline performs much better on directories 09--10 than
 on directories 01--06, the CNN's higher fixed-test result is not evidence that
@@ -383,14 +454,16 @@ from geometry to the current CNN. The finding concerns this generic prompt and
 baseline; it does not establish that a VLM is necessary when a strong
 task-specific detector is available.
 
-The learned backend produces the highest whole-dataset mean IoU
-($0.4510\pm0.0081$), suggesting that it estimates grasp centre and extent more
-closely than fixed short-side rules. In contrast, the geometric backend has the
-lowest mean angle error ($14.81^\circ$ over all images and $12.01^\circ$ on the
-fixed test subset). Its rule of orienting a grasp perpendicular to the object
-long axis is therefore still a useful prior. The two properties should not be
-collapsed into the binary Cornell score: CNN improvements are mainly spatial,
-whereas geometry remains more stable in orientation.
+The multi-head learned backend produces the highest deterministic whole-dataset
+mean IoU ($0.4640\pm0.0165$), and its image-wise out-of-fold IoU is 0.4580
+compared with 0.4390 for the single-head model. This suggests that separating
+centre, size, and orientation objectives improves spatial regression. In
+contrast, the geometric backend has the lowest mean angle error
+($14.81^\circ$ over all images and $12.01^\circ$ on the fixed test subset).
+Its rule of orienting a grasp perpendicular to the object long axis is
+therefore still a useful prior. These properties should not be collapsed into
+the binary Cornell score: CNN improvements are mainly spatial, whereas
+geometry remains more stable in orientation.
 
 The paired test outcomes reinforce this interpretation. Sixteen images are
 successful only for the CNN and 12 only for geometry. These 28 discordant cases
@@ -414,8 +487,10 @@ leaderboards. Lenz et al.\ use RGB-D input and image-wise/object-wise evaluation
 \citep{lenz2015deep}; Redmon and Angelova also include depth and report standard
 five-fold results for global and multi-grasp regression
 \citep{redmon2015real}. Kumra and Kanan employ a substantially larger RGB-D
-ResNet-based model \citep{kumra2017robotic}. In contrast, this study uses RGB
-VLM crops and a directory-based split.
+ResNet-based model \citep{kumra2017robotic}. This study now reports an
+image-wise five-fold result, but still differs through its RGB VLM crops,
+single-rectangle output, independently generated fold membership, and absence
+of an auditable object-wise split.
 
 More recent work also changes the output representation. GG-CNN predicts grasp
 quality, angle, and width at every depth pixel
@@ -496,19 +571,18 @@ those stages, not as a complete robotic grasping system.
 The study has seven principal limitations. First, evaluation uses only Cornell,
 whose mostly uncluttered tabletop images do not represent open-world scenes.
 Second, the paired test subset contains only 85 images, so four additional
-successes correspond to 4.71 percentage points. Third, the directory split is
-not a standard object-wise protocol, and the split audit indicates unequal
-difficulty. Fourth, both backends emit only one grasp and cannot represent
-multiple valid grasp modes.
+successes correspond to 4.71 percentage points. Third, image-wise folds permit
+views of one physical object to cross roles, while the missing authoritative
+instance mapping prevents an auditable object-wise result. Fourth, both
+backends emit only one grasp and cannot represent multiple valid grasp modes.
 
 Fifth, Grounding DINO's 885/885 coverage is not a localisation-accuracy metric;
 a loose or incorrect box can still count as detected. Sixth, the study performs
 no physical robot execution, so it does not measure collision-free reachability,
-gripper contact, lifting, or recovery. Seventh, the CNN is trained on only 600
-images and its five-run test success has a 4.53 percentage-point standard
-deviation. Results are consequently sensitive to training randomness, and the
-lightweight engineering choices should be interpreted as a baseline rather
-than a settled architecture.
+gripper contact, lifting, or recovery. Seventh, each image-wise fold uses only
+566 training images; deterministic five-seed results and fold statistics both
+show non-zero variation. The lightweight engineering choices should therefore
+be interpreted as a baseline rather than a settled architecture.
 
 %==============================================================================
 \chapter{Conclusion}
@@ -556,16 +630,19 @@ used to regenerate these figures are
 \end{table}
 
 \section{Configuration Details}
-The original experiment environment was recorded as Conda environment
-\texttt{msc-grasp} with PyTorch 2.5.1+\texttt{cu121}. The Grounding DINO
-publisher was \texttt{IDEA-Research}, and the checkpoint was
+The original localisation experiment environment was recorded as Conda
+environment \texttt{msc-grasp} with PyTorch 2.5.1+\texttt{cu121}. The formal
+deterministic CNN and cross-validation runs used PyTorch
+2.11.0+\texttt{cu128}. The Grounding DINO publisher was
+\texttt{IDEA-Research}, and the checkpoint was
 \texttt{grounding-dino-tiny}. It used the generic prompt
 \texttt{small object}, box threshold 0.25, and text threshold 0.25. The VLM box
 was expanded by 10\% before local estimation.
 
 The CNN used crop size 224, batch size 32, learning rate $10^{-3}$, weight decay
 $10^{-4}$, a maximum of 80 epochs, and early-stopping patience 20. Repeated
-runs used seeds 42--46.
+runs used seeds 42--46. Image-wise folds used a shared seed-42 manifest and
+training seed 42 in each fold.
 
 \subsection*{Core commands}
 \begin{lstlisting}
@@ -576,6 +653,16 @@ conda run -n msc-grasp python \
 conda run -n msc-grasp python src/vlm/run_vlm_assisted_grasp.py
 conda run -n msc-grasp python \
   src/vlm/run_cnn_grasp.py --mode multi --num-runs 5 --device cuda
+conda run -n msc-grasp python \
+  src/vlm/run_cnn_cross_validation.py --mode manifest
+conda run -n msc-grasp python \
+  src/vlm/run_cnn_cross_validation.py --mode run \
+  --architecture single --fold 0 --device cuda
+conda run -n msc-grasp python \
+  src/vlm/run_cnn_cross_validation.py --mode aggregate \
+  --architecture single
+conda run -n msc-grasp python \
+  src/vlm/run_cnn_cross_validation.py --mode compare
 conda run -n msc-grasp python src/shared/analyze_cornell_splits.py
 conda run -n msc-grasp python src/vlm/analyze_backend_comparison.py
 \end{lstlisting}
@@ -586,6 +673,12 @@ data/processed/baseline_cv/cv_baseline_summary.json
 data/processed/vlm/grasp/vlm_assisted_grasp_summary.json
 data/processed/vlm/cnn_grasp/multi_run_summary.json
 data/processed/vlm/cnn_grasp/cnn_grasp_predictions.csv
+data/processed/vlm/cnn_cross_validation/image_wise_folds_seed_42.json
+data/processed/vlm/cnn_cross_validation/single/combined_predictions.csv
+data/processed/vlm/cnn_cross_validation/single/cross_validation_summary.json
+data/processed/vlm/cnn_cross_validation/multi_head/combined_predictions.csv
+data/processed/vlm/cnn_cross_validation/multi_head/cross_validation_summary.json
+data/processed/vlm/cnn_cross_validation/architecture_comparison.json
 data/processed/shared/split_audit/split_metrics.json
 data/processed/shared/split_audit/same_test_subset_metrics.csv
 data/processed/vlm/backend_comparison/comparison_summary.json
