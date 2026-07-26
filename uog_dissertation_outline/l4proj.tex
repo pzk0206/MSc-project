@@ -59,25 +59,53 @@
 \todo{Briefly describe the remaining chapters.}
 
 %==============================================================================
-\chapter{Literature Review}
+\chapter{文献综述}
 
-\section{Robotic Grasp Detection}
-\todo{Review prior research on robotic grasp detection. Explain how grasp detection is commonly formulated and why visual perception is central to this problem.}
+\section{机器人抓取检测}
+机器人抓取检测处于视觉感知与操作执行之间：系统不仅要回答“物体在哪里”，还要给出夹爪中心、开口尺度和接近方向等几何量。目标检测框只描述物体所占区域，抓取则受到表面形状、遮挡、夹爪宽度和碰撞风险约束，因此语义上正确的目标框并不自动构成可执行抓取。实际机器人还需要深度恢复、运动规划、控制与接触反馈；二维图像实验只能评价感知阶段，不能把离线矩形匹配直接称为物理抓取成功。
 
-\section{2D Grasp Rectangle Detection and Cornell Benchmarking}
-\todo{Review the 2D grasp rectangle formulation and Cornell-style benchmarking. Include classic works such as Lenz et al. and Redmon and Angelova.}
+早期方法常把物体分割、轮廓提取和主轴分析组合成确定性流程。这类方法计算成本低，能把预测原因追溯到阈值、连通区域或几何矩；在背景简单、物体与桌面对比明显时具有工程吸引力。然而，颜色阈值和最大轮廓隐含了“单物体、背景稳定、轮廓完整”等强假设，光照、阴影、反光或定位框过松都可能改变主轴。它们表达了明确的几何先验，却很难从数据中学习不同物体的可抓取区域。
 
-\section{Classical Computer Vision and Deep Learning Approaches}
-\todo{Summarise traditional CV methods and supervised deep learning methods. Critically compare their strengths and weaknesses, especially data dependence, generalisation, and interpretability.}
+Jiang 等人把平行夹爪抓取表示为图像平面上的有向矩形，以两条平行边对应夹爪接触板，使抓取检测可以使用视觉检测和学习方法评价\citep{jiang2011efficient}。这一抽象把复杂六自由度操作压缩为中心、宽度、高度与角度，适合桌面单物体研究，也成为 Cornell 基准的核心表示。其优势是标注和比较方便；不足是忽略接近深度、表面法向、碰撞和夹持力，同一物体还可能对应多个同样有效的矩形。因此，单个预测与某个标注不重合，未必意味着抓取在物理上不可行；反过来，矩形匹配成功也不保证机器人能够完成动作。
 
-\section{Vision-Language Models and Open-Vocabulary Grounding}
-\todo{Review VLMs, zero-shot/open-vocabulary perception, and grounding models such as Grounding DINO, OWL-ViT, or Florence-2. Focus on how these models may support object localisation for robotic perception.}
+\section{二维抓取矩形与 Cornell 基准}
+Cornell Grasping Dataset 为每幅 RGB-D 图像提供多个正抓取矩形，推动了二维抓取方法的统一比较。常用 rectangle metric 要求预测矩形与任一正标注的交并比（intersection over union, IoU）大于 0.25，同时平行夹爪的方向误差小于 $30^\circ$。该规则同时约束空间重合与方向，但阈值二值化会隐藏接近边界的差异：IoU 为 0.249 与 0.251 的预测几何质量非常接近，最终标签却相反。因此，成功率应与平均 IoU、角度误差及案例分析一起报告。
 
-\section{Few-Shot and Lightweight Adaptation}
-\todo{Briefly review optional adaptation methods such as LoRA or QLoRA. Explain why this is treated as an extension rather than the main project goal.}
+Lenz 等人用 RGB-D 输入学习候选抓取的特征和分数，并以小网络进行第一阶段筛选、较大网络重新评价少量候选\citep{lenz2015deep}。两阶段设计减少近穷举搜索的计算量，结构化正则也利用了颜色、深度和表面法向等多模态信息。它的重要贡献不仅是提高矩形指标，还在 Baxter 与 PR2 上进行了执行实验，显示感知输出能够嵌入完整机器人流程。不过，其候选搜索、RGB-D 特征和机器人实验与本项目的 RGB 裁剪单矩形回归不同；物理执行率也不能与 Cornell 离线成功率直接排列比较。
 
-\section{Literature Gap}
-\todo{Critically identify limitations in previous work and explain the gap addressed by this dissertation: whether open-vocabulary grounding outputs can be converted into useful 2D robotic grasp rectangles through geometric post-processing.}
+Redmon 与 Angelova 将候选搜索改为卷积神经网络（convolutional neural network, CNN）直接回归，并进一步用网格输出多个抓取，展示了全局单次前向预测的实时性\citep{redmon2015real}。相较 Lenz 的逐候选评分，它减少了推理步骤并把特征提取和矩形估计联合优化；但全局回归会把多个有效抓取压缩为一个目标，且其已报告结果使用 RGB-D 与标准五折。它支持“图像到矩形”的技术路线，却不能证明不同输入模态或不同 fold 成员下的数字直接可比。
+
+Cornell 常见 image-wise 与 object-wise 两种划分。Image-wise 将图像分配到折中，同一物体的相邻视角可能同时进入训练与测试；object-wise 则把物体实例隔离，更接近未见物体泛化，通常也更难。Lenz 的结果表明确同时报告这两种设置，并指出 object-wise 更容易暴露过拟合。若没有权威的图像到物体实例映射，仅按下载目录编号分组不能重建 object-wise。本项目因此只把可审计的 image-wise 五折称为图像级交叉验证，不声称已经测试未见物体。Cornell 规模较小、场景多为单物体和简洁背景，也不足以代表开放世界杂乱场景。
+
+评价协议的透明度还影响复现。不同研究可能采用不同图像缩放、角度规范化、增强方式和“与任一真值匹配”的实现；即使都写作 image-wise 五折，fold 成员也未必相同。若只给平均成功率而不保存样本清单，后续研究无法判断差异来自模型还是划分。本项目因此保存 manifest、随机种子和哈希，并在相同样本上计算 pooled 指标。Pooled 结果回答全部测试预测合并后的总体表现，fold 标准差则反映划分间波动，两者含义不同，不能互相替代。
+
+\section{传统计算机视觉与深度学习方法}
+传统计算机视觉基线通常在整图上进行颜色或亮度分割，再从最大轮廓计算中心、包围框与主轴角度。其优点是无需训练、行为可解释，并可快速诊断“分割错”还是“几何估计错”；缺点是阈值对采集条件敏感，而且最大连通区域不一定是目标。对本项目而言，这类基线仍有价值，因为它建立了不使用语义定位时的参照，使 Grounding DINO 带来的变化能够与后端学习效果分开。
+
+深度学习逐步减少了手工特征。Kumra 与 Kanan 使用深层残差网络处理 RGB-D 并进行抓取分类和回归\citep{kumra2017robotic}，说明更强视觉表征能够改善候选判断，但模型容量、深度通道和增强策略同时发生变化，难以把提升归因于某一个因素。学习方法还依赖训练分布；小数据集上的较大网络可能记忆物体外观，因此随机种子、验证集选择和测试隔离都应写清楚。
+
+Morrison 等人的生成式抓取卷积神经网络（Generative Grasping Convolutional Neural Network, GG-CNN）从单幅深度图在每个像素预测抓取质量、角度和宽度\citep{morrison2018closing}。密集输出绕开离散候选采样，能表达多个位置，并可在闭环控制中快速更新。其用 $\sin(2\theta)$ 和 $\cos(2\theta)$ 表示平行夹爪的 $\pi$ 周期方向，避免 $-\pi/2$ 与 $\pi/2$ 边界处的回归不连续，这一表示直接启发本项目的方向头。限制在于 GG-CNN 依赖深度，并将空间预测保留为图，因此与 RGB 裁剪后的单矩形输出仅为有限可比；其动态机器人结果更不能作为本项目离线指标的基线。
+
+后续 GR-ConvNet 以生成式残差网络同时预测质量、角度和宽度图\citep{kumra2020antipodal}，Gaussian-guided 方法进一步以高斯形式塑造抓取质量监督\citep{li2022gaussian}。这些方法的共同方向是密集多抓取，而非单个全局参数：它们保留局部候选，适合从多个可行解中选择。与此同时，它们常使用 RGB-D、较强增强和不同训练协议。论文中更高的 Cornell 百分比反映了领域进展，却不能脱离输入模态、数据划分、输出形式与评价实现组成公平排行榜。本项目采用轻量单矩形 CNN，目的不是声称达到最新水平，而是在共同定位裁剪下进行受控后端比较。
+
+\section{视觉语言模型与开放词汇定位}
+视觉语言模型（vision-language model, VLM）通过联合视觉和文本表示，使自然语言能够参与目标选择。CLIP 以大规模图文对学习可迁移的对齐空间，证明自然语言监督可以支持零样本视觉识别\citep{radford2021learning}。然而，图像级相似度不能给出目标的精确空间范围，也不包含夹爪几何，因此仍需定位模型和抓取后端。
+
+Grounding DINO 将 Transformer 检测器与 grounded pre-training 结合，使用类别名或指代表达进行开放集目标检测\citep{liu2023grounding}。其语言引导查询选择与跨模态解码能够在没有 Cornell 专项训练的情况下根据提示返回目标框。对单目标 Cornell 图像，这提供了一种通用前端：先把目标从背景中裁出，再用几何规则或 CNN 估计抓取。该模块的优势是把语义定位与抓取回归解耦，后端可以替换；主要风险是 prompt、置信度阈值和框边界会改变裁剪内容。每幅图都返回框的 885/885 定位覆盖率只说明接口没有空输出，并不等于框准确，也不等于抓取可行。
+
+Vuong 等人更直接研究语言驱动抓取，在 Grasp-Anything++ 上把自然语言指定的目标抓取作为条件生成问题，并使用扩散模型预测抓取\citep{vuong2024language}。它显示语言不仅可选类别，还可描述杂乱场景中的目标或部位，研究范围比“通用 prompt 定位单个 Cornell 物体”更广。其大规模数据、语言指令、生成式输出及真实机器人展示是重要优势；但数据集和指标均不同，本项目不能把其结果当作 Cornell 数值基线。两者的联系是语言条件可以承担目标选择，区别是本项目刻意固定通用提示，只检验开放词汇定位框能否为传统几何或轻量回归提供更好的输入。
+
+\section{轻量与参数高效适配}
+参数高效微调为大模型域适配提供另一条路线。低秩适配（Low-Rank Adaptation, LoRA）冻结原模型权重，只学习低秩增量\citep{hu2021lora}；量化低秩适配（Quantized LoRA, QLoRA）进一步结合低比特量化，降低训练显存\citep{dettmers2023qlora}。这些方法说明无需更新全部参数也可调整大型模型，但其原始研究重点并非二维抓取，实际收益仍需任务数据和独立实验验证。
+
+本研究没有对 Grounding DINO 实施 LoRA 或 QLoRA。原因不是否认适配价值，而是核心问题要求先建立清晰控制变量：若同时改变定位器权重、提示和抓取后端，性能变化将无法归因。GTX 1650 Ti 的 4\,GB 显存也限制了大模型训练范围。因此，预训练 VLM 保持冻结，只有轻量 CNN 后端在 Cornell 标注上训练；参数高效适配被保留为后续研究，而非未经验证写入当前贡献。
+
+\section{研究缺口}
+既有研究分别推进了矩形表示、RGB-D 深度回归、密集抓取生成与语言驱动选择，但仍缺少一种面向本项目条件的受控证据：在 RGB-only、单目标 Cornell 和不提供样本类别的通用 prompt 下，开放词汇定位究竟贡献了多少；当定位裁剪完全相同时，确定性几何、单头 CNN 与多头 CNN 的差异又来自哪里。现有高性能论文多改变了输入模态、数据划分或输出形式，无法直接回答这个模块归因问题。
+
+本论文据此构建三条相互关联的流程。首先，以整图传统视觉作为不含语义定位的基线；其次，把共同 Grounding DINO crop 交给几何后端；最后，在字节相同的 crop 上训练单头与多头轻量 CNN。固定目录结果用于与早期开发产物配对，五个随机种子检验训练随机性，共同 image-wise 五折 manifest 检验图像划分变化。研究目的不是宣布新的 Cornell 最新水平，而是通过可复现的模块化比较，回答定位前端、学习后端和多任务分头各自的作用，并明确 image-wise、object-wise、离线矩形与物理抓取之间的证据边界。
+
+这一缺口也决定了论文的批判立场：若定位前端带来最大变化，则应优先研究裁剪质量而非盲目扩大后端；若几何与 CNN 在不同误差维度互补，则单一成功率会掩盖设计机会；若多头只产生有限增益，则结果应按效应大小和折间稳定性解释，而不能仅凭均值上升作强结论。由此，文献综述不只提供方法清单，也给出了后续研究问题、控制变量和结论强度的依据。
 
 %==============================================================================
 \chapter{Methodology}
