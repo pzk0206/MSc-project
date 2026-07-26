@@ -635,6 +635,16 @@ def predict_from_crop(
     }
 
 
+def _selected_sample_keys(
+    samples: list[dict],
+) -> set[tuple[str, str]]:
+    """Return a unique set of sample keys selected for evaluation."""
+    keys = [tuple(item["key"]) for item in samples]
+    if len(keys) != len(set(keys)):
+        raise ValueError("duplicate sample key in evaluation selection")
+    return set(keys)
+
+
 def evaluate_model(
     model: object,
     all_samples: list[dict],
@@ -643,7 +653,7 @@ def evaluate_model(
     device: str = "cuda",
 ) -> tuple[list[dict], dict]:
     """
-    在全量 Cornell 数据集上评估 CNN backend。
+    在显式选择的 Cornell 样本上评估 CNN backend。
 
     流程:
     1. 对每个样本，用 VLM box 裁剪
@@ -652,8 +662,6 @@ def evaluate_model(
     4. Cornell-style 评估
     5. 与 baseline 对照
     """
-    import torch
-
     # 加载 baseline 结果用于对照
     baseline_rows = {}
     if BASELINE_PREDICTIONS_CSV.exists():
@@ -664,11 +672,14 @@ def evaluate_model(
     rows = []
     success_count = 0
     eval_count = 0
+    selected_keys = _selected_sample_keys(all_samples)
 
     for i in range(len(dataset)):
         sample = dataset[i]
         key = (sample["object_directory"], sample["sample_id"])
 
+        if key not in selected_keys:
+            continue
         if key not in vlm_boxes:
             continue
 

@@ -1,6 +1,9 @@
 import pytest
 
-from src.vlm.run_cnn_grasp import partition_samples_by_role
+from src.vlm.run_cnn_grasp import (
+    _selected_sample_keys,
+    partition_samples_by_role,
+)
 
 
 def _items() -> list[dict]:
@@ -36,4 +39,24 @@ def test_partition_samples_rejects_missing_or_unknown_roles() -> None:
                 "pcd0101": "validation",
                 "pcd0200": "holdout",
             },
+        )
+
+
+def test_selected_sample_keys_restrict_evaluation_scope() -> None:
+    selected = _selected_sample_keys(
+        [
+            {"key": ("01", "pcd0100")},
+            {"key": ("09", "pcd0900")},
+        ]
+    )
+    assert selected == {("01", "pcd0100"), ("09", "pcd0900")}
+
+
+def test_selected_sample_keys_reject_duplicates() -> None:
+    with pytest.raises(ValueError, match="duplicate sample key"):
+        _selected_sample_keys(
+            [
+                {"key": ("01", "pcd0100")},
+                {"key": ("01", "pcd0100")},
+            ]
         )
