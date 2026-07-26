@@ -1,6 +1,6 @@
 # Cornell 数据划分审计
 
-日期：2026-07-24
+日期：2026-07-26
 
 ## 审计目的
 
@@ -94,6 +94,30 @@ symmetry / multiple_valid_grasps / weak_boundary / complex_shape / narrow_part
 五次 CNN 实验的测试成功率均值为 82.35% ± 4.53%。这个聚合数字用于描述
 随机种子波动，不用于逐样本交叉分类，因为当前只保存了最后一轮的逐样本
 预测。
+
+## Image-wise 五折协议审计
+
+Cornell image-wise 五折只要求每张图具有稳定且唯一的 sample ID，因此当前
+885 张图可以可靠生成五折清单。协议定义依据 Lenz、Lee 和 Saxena 的
+“Deep Learning for Detecting Robotic Grasps”（IJRR 2015）：
+<https://www.cs.cornell.edu/~asaxena/papers/lenz_lee_saxena_deep_learning_grasping_ijrr2014.pdf>。
+本项目的清单生成与校验代码为独立实现，没有复制外部交叉验证代码。
+
+正式清单使用 seed 42。每个 fold 包含 566 个训练样本、142 个验证样本和
+177 个测试样本；五个测试集合两两互斥，合并后恰好覆盖全部 885 张图。
+单头和多头 CNN 将共同读取同一个 JSON 文件：
+
+```text
+data/processed/vlm/cnn_cross_validation/image_wise_folds_seed_42.json
+SHA-256: b7d3e22a145f50add6d57a70bf0abb87b4b12ee674541deab0d7fee9a286bc2d
+```
+
+Object-wise 五折需要“图像到物体实例”的权威映射。原始数据、论文和已检查
+的公开实现均未提供本项目可审计使用的完整映射；`01`–`10` 只是存储目录，
+不能当作 object ID。因此当前不生成或声称 object-wise 结果。
+
+Image-wise 协议允许同一物体的不同视角落入训练和测试集合，所以它能支持
+标准的逐图性能比较，但不能证明对未见物体的泛化。
 
 ## 审计结论
 
