@@ -1,4 +1,5 @@
 import ast
+import json
 from pathlib import Path
 
 import pytest
@@ -86,3 +87,30 @@ def test_default_output_directory_keeps_multi_head_away_from_legacy_results() ->
     assert run_cnn_grasp.resolve_output_dir("multi_head", None) == Path(
         "data/processed/vlm/cnn_grasp_multi_head"
     )
+
+
+def test_seed_output_paths_isolate_every_run_artifact(tmp_path: Path) -> None:
+    paths = run_cnn_grasp.build_seed_output_paths(tmp_path, 42)
+
+    assert paths.model_weights == tmp_path / "cnn_grasp_model_seed_42.pt"
+    assert paths.training_history_json == tmp_path / "training_history_seed_42.json"
+    assert paths.predictions_csv == tmp_path / "cnn_grasp_predictions_seed_42.csv"
+    assert paths.summary_json == tmp_path / "cnn_grasp_summary_seed_42.json"
+
+
+def test_save_results_can_target_seed_specific_files(tmp_path: Path) -> None:
+    predictions_csv = tmp_path / "cnn_grasp_predictions_seed_42.csv"
+    summary_json = tmp_path / "cnn_grasp_summary_seed_42.json"
+
+    run_cnn_grasp.save_results(
+        [{"sample_id": "pcd0100", "success": 1}],
+        {"seed": 42, "success_rate": 1.0},
+        predictions_csv=predictions_csv,
+        summary_json=summary_json,
+    )
+
+    assert predictions_csv.read_text(encoding="utf-8").splitlines() == [
+        "sample_id,success",
+        "pcd0100,1",
+    ]
+    assert json.loads(summary_json.read_text(encoding="utf-8"))["seed"] == 42

@@ -82,6 +82,14 @@ class OutputPaths:
     visualization_dir: Path
 
 
+@dataclass(frozen=True)
+class SeedOutputPaths:
+    model_weights: Path
+    training_history_json: Path
+    predictions_csv: Path
+    summary_json: Path
+
+
 def build_output_paths(output_dir: Path) -> OutputPaths:
     """Build all generated artifact paths from one CLI-controlled directory."""
     return OutputPaths(
@@ -91,6 +99,16 @@ def build_output_paths(output_dir: Path) -> OutputPaths:
         summary_json=output_dir / "cnn_grasp_summary.json",
         training_history_json=output_dir / "training_history.json",
         visualization_dir=output_dir / "visualizations",
+    )
+
+
+def build_seed_output_paths(output_dir: Path, seed: int) -> SeedOutputPaths:
+    """Build non-overlapping artifacts for one repeated training run."""
+    return SeedOutputPaths(
+        model_weights=output_dir / f"cnn_grasp_model_seed_{seed}.pt",
+        training_history_json=output_dir / f"training_history_seed_{seed}.json",
+        predictions_csv=output_dir / f"cnn_grasp_predictions_seed_{seed}.csv",
+        summary_json=output_dir / f"cnn_grasp_summary_seed_{seed}.json",
     )
 
 
@@ -677,21 +695,34 @@ def evaluate_model(
     return rows, summary
 
 
-def save_results(rows: list[dict], summary: dict) -> None:
+def save_results(
+    rows: list[dict],
+    summary: dict,
+    predictions_csv: Path | None = None,
+    summary_json: Path | None = None,
+) -> None:
     """保存预测结果和汇总。"""
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    selected_predictions_csv = predictions_csv or PREDICTIONS_CSV
+    selected_summary_json = summary_json or SUMMARY_JSON
+    selected_predictions_csv.parent.mkdir(parents=True, exist_ok=True)
+    selected_summary_json.parent.mkdir(parents=True, exist_ok=True)
 
     if rows:
         fieldnames = list(rows[0].keys())
-        with open(PREDICTIONS_CSV, "w", newline="", encoding="utf-8") as f:
+        with open(
+            selected_predictions_csv,
+            "w",
+            newline="",
+            encoding="utf-8",
+        ) as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(rows)
-        print(f"预测结果 CSV: {PREDICTIONS_CSV}")
+        print(f"预测结果 CSV: {selected_predictions_csv}")
 
-    with open(SUMMARY_JSON, "w", encoding="utf-8") as f:
+    with open(selected_summary_json, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2)
-    print(f"总结 JSON: {SUMMARY_JSON}")
+    print(f"总结 JSON: {selected_summary_json}")
 
 
 def save_visualizations(
@@ -989,30 +1020,55 @@ def main() -> None:
             print(f">>> Run {run_idx + 1}/{args.num_runs}  (seed={seed})")
             print(f"{'='*60}")
 
-            model_path = output_paths.output_dir / f"cnn_grasp_model_seed_{seed}.pt"
-            history_path = (
-                output_paths.output_dir
-                / f"training_history_seed_{seed}.json"
-            )
+            seed_paths = build_seed_output_paths(output_paths.output_dir, seed)
             model, best_val_loss = _train_one_run(
                 train_data,
                 val_data,
                 device,
                 seed,
                 architecture=args.architecture,
-                model_weights_path=model_path,
-                history_path=history_path,
+                model_weights_path=seed_paths.model_weights,
+                history_path=seed_paths.training_history_json,
             )
             print(f"best val_loss = {best_val_loss:.6f}")
 
             result = _eval_on_splits(model, dataset, vlm_boxes, device)
-            run_records.append({
+            run_record = {
                 "seed": seed,
                 "best_val_loss": best_val_loss,
                 "all": result["all"],
                 "test": result["test"],
                 "rows": result["rows"],
-            })
+            }
+            run_records.append(run_record)
+
+            save_results(
+                result["rows"],
+                {
+                    "method_name": (
+                        f"vlm_cnn_{args.architecture}_grasp_regressor_rgb"
+                    ),
+                    "architecture": args.architecture,
+                    "seed": seed,
+                    "best_val_loss": best_val_loss,
+                    "sample_count": result["all"]["count"],
+                    "success_count": sum(
+                        row["success"] for row in result["rows"]
+                    ),
+                    "success_rate": result["all"]["success_rate"],
+                    "mean_best_iou": result["all"]["mean_iou"],
+                    "mean_best_angle_error_degrees": result["all"]["mean_angle"],
+                    "test_sample_count": result["test"]["count"],
+                    "test_success_rate": result["test"]["success_rate"],
+                    "test_mean_iou": result["test"]["mean_iou"],
+                    "test_mean_angle_error_degrees": result["test"]["mean_angle"],
+                    "iou_threshold": IOU_THRESHOLD,
+                    "angle_threshold_degrees": ANGLE_THRESHOLD_DEGREES,
+                    "predictions_csv": str(seed_paths.predictions_csv),
+                },
+                predictions_csv=seed_paths.predictions_csv,
+                summary_json=seed_paths.summary_json,
+            )
 
             print(f"  Full:      {result['all']['success_rate']*100:.1f}%  "
                   f"IoU={result['all']['mean_iou']:.4f}  angle={result['all']['mean_angle']:.2f}°")
@@ -1060,6 +1116,9 @@ def main() -> None:
         last_rows = last_record["rows"]
         save_results(last_rows, {
             "method_name": "vlm_cnn_multi_run_last",
+            "architecture": args.architecture,
+            "seed": last_record["seed"],
+            "best_val_loss": last_record["best_val_loss"],
             "sample_count": last_record["all"]["count"],
             "success_count": int(
                 last_record["all"]["success_rate"] * last_record["all"]["count"]

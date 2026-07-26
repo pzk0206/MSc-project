@@ -56,7 +56,7 @@ conda run -n msc-grasp python src/vlm/run_cnn_grasp.py \
   --output-dir data/processed/vlm/cnn_grasp_multi_head \
   --seed 42 --device cuda
 
-# 多头模型五次重复实验；各 seed 的权重和历史分别保存
+# 多头模型五次重复实验；各 seed 的权重、历史、预测和汇总分别保存
 conda run -n msc-grasp python src/vlm/run_cnn_grasp.py \
   --mode multi --architecture multi_head \
   --output-dir data/processed/vlm/cnn_grasp_multi_head \
