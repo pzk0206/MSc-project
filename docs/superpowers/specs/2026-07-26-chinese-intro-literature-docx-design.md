@@ -16,9 +16,11 @@ docs/drafts/introduction_literature_review_zh.docx
 
 ## 篇幅与风格
 
-- 总篇幅约 3000–4000 中文字。
+- 总篇幅约 2000–3000 中文字。
 - 采用正式但清晰的学术中文，避免堆砌术语和过长背景。
 - 每一节围绕一个明确问题展开，使用“论点—证据—与本项目关系”的结构。
+- 每个二级小节原则上使用 1–3 个短段落，不重复 Methodology 和 Results
+  已经详细说明的内容。
 - 使用 Word 一级、二级标题和普通正文样式，便于逐段批注和未来翻译。
 - 不保留 `TODO`、占位符或未经解释的英文缩写。
 
@@ -111,7 +113,7 @@ docs/drafts/introduction_literature_review_zh.docx
 
 - DOCX 可以被标准 ZIP/DOCX 解析器正常打开。
 - 所有预定一级、二级标题均存在且顺序正确。
-- 中文正文约 3000–4000 字，不含 `TODO` 或占位符。
+- 中文正文约 2000–3000 字，不含 `TODO` 或占位符。
 - 三个研究问题与实际 Methodology、Results、Discussion 对应。
 - 正文使用的引用均能在 `l4proj.bib` 中找到。
 - 关于固定目录、五随机种子、image-wise 五折和 object-wise 阻塞的表述互不
