@@ -3,6 +3,7 @@ import pytest
 
 from src.simulation.pybullet.visualization import (
     depth_to_uint8,
+    draw_backend_comparison,
     draw_ground_truth_boxes,
     draw_prediction,
     draw_target_evaluation,
@@ -128,3 +129,69 @@ def test_draw_target_evaluation_shows_truth_match_and_detection() -> None:
     assert np.any(drawn[30, 60])
     assert np.any(drawn[32, 62])
     assert np.count_nonzero(drawn) > 100
+
+
+def test_draw_backend_comparison_labels_three_ordered_panels() -> None:
+    panels = {
+        "geometry": np.full(
+            (40, 60, 3),
+            (0, 0, 255),
+            dtype=np.uint8,
+        ),
+        "single": np.full(
+            (40, 60, 3),
+            (0, 255, 0),
+            dtype=np.uint8,
+        ),
+        "multi_head": np.full(
+            (40, 60, 3),
+            (255, 0, 0),
+            dtype=np.uint8,
+        ),
+    }
+    originals = {
+        name: image.copy() for name, image in panels.items()
+    }
+
+    result = draw_backend_comparison(panels)
+
+    assert result.dtype == np.uint8
+    assert result.shape == (64, 180, 3)
+    assert all(
+        np.array_equal(panels[name], originals[name])
+        for name in panels
+    )
+    assert result[30, 10].tolist() == [0, 0, 255]
+    assert result[30, 70].tolist() == [0, 255, 0]
+    assert result[30, 130].tolist() == [255, 0, 0]
+
+
+@pytest.mark.parametrize(
+    "panels",
+    [
+        {
+            "single": np.zeros((10, 10, 3), dtype=np.uint8),
+            "geometry": np.zeros((10, 10, 3), dtype=np.uint8),
+            "multi_head": np.zeros((10, 10, 3), dtype=np.uint8),
+        },
+        {
+            "geometry": np.zeros((10, 10, 3), dtype=np.uint8),
+            "single": np.zeros((10, 10, 3), dtype=np.uint8),
+        },
+        {
+            "geometry": np.zeros((10, 10, 3), dtype=np.uint8),
+            "single": np.zeros((12, 10, 3), dtype=np.uint8),
+            "multi_head": np.zeros((10, 10, 3), dtype=np.uint8),
+        },
+        {
+            "geometry": np.zeros((10, 10, 3), dtype=np.float32),
+            "single": np.zeros((10, 10, 3), dtype=np.uint8),
+            "multi_head": np.zeros((10, 10, 3), dtype=np.uint8),
+        },
+    ],
+)
+def test_draw_backend_comparison_rejects_invalid_panels(
+    panels: dict[str, np.ndarray],
+) -> None:
+    with pytest.raises(ValueError):
+        draw_backend_comparison(panels)

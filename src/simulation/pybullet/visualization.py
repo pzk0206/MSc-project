@@ -16,6 +16,7 @@ _ENTITY_COLORS_BGR = {
     "robot": (255, 0, 255),
 }
 _DETECTION_COLOR_BGR = (255, 0, 0)
+_BACKEND_ORDER = ("geometry", "single", "multi_head")
 
 
 def _validated_rgb(rgb: np.ndarray) -> np.ndarray:
@@ -204,6 +205,49 @@ def draw_target_evaluation(
         cv2.LINE_AA,
     )
     return image
+
+
+def draw_backend_comparison(
+    panels: Mapping[str, np.ndarray],
+) -> np.ndarray:
+    """Label and concatenate fixed-order BGR backend prediction panels."""
+
+    if tuple(panels) != _BACKEND_ORDER:
+        raise ValueError(
+            "backend panels must be ordered geometry, single, multi_head"
+        )
+    validated = []
+    expected_shape = None
+    for backend in _BACKEND_ORDER:
+        panel = np.asarray(panels[backend])
+        if (
+            panel.ndim != 3
+            or panel.shape[2] != 3
+            or panel.dtype != np.uint8
+        ):
+            raise ValueError(
+                "backend panels must be BGR uint8 images"
+            )
+        if expected_shape is None:
+            expected_shape = panel.shape
+        elif panel.shape != expected_shape:
+            raise ValueError("backend panels must have matching shapes")
+
+        label_strip = np.zeros((24, panel.shape[1], 3), dtype=np.uint8)
+        cv2.putText(
+            label_strip,
+            backend,
+            (6, 17),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (255, 255, 255),
+            1,
+            cv2.LINE_AA,
+        )
+        validated.append(
+            np.concatenate((label_strip, panel.copy()), axis=0)
+        )
+    return np.concatenate(validated, axis=1)
 
 
 def draw_prediction(
