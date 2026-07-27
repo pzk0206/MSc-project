@@ -55,11 +55,15 @@ seed 42 和正式多头 CNN seed 42 接收完全相同的 Grounding DINO 定位�
 ```text
 targets/<target>/
 ├── evaluation.png
+├── prediction.png
 ├── geometry_prediction.png
 ├── single_prediction.png
 ├── multi_head_prediction.png
 └── backend_comparison.png
 ```
+
+其中 `prediction.png` 与 `geometry_prediction.png` 保存同一 geometry 图像；
+前者用于兼容现有固定输出，后者让并列后端命名明确。
 
 CSV 使用一条目标选择行加嵌套 JSON 会降低审计性，因此新增独立
 `backend_results.csv`，每个正确目标与后端一行，稳定顺序为
