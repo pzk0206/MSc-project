@@ -21,6 +21,24 @@
 - 设计与实施计划分别保存于 `docs/superpowers/specs/` 和
   `docs/superpowers/plans/`；实现检查点提交为 `adc2c84`、`ba250fd`、
   `c49ad30`、`1e68f8a` 和 `4ce9762`。
+- 增加向后兼容的命名多物体场景、纯目标选择评价、四实体真值框、逐 prompt
+  可视化和固定研究 CLI；segmentation 明确只作事后评价。
+- 固定场景使用黄色鸭、红色方块、绿色球体和 Panda distractor；一次渲染、
+  一次模型加载后运行三条明确 prompt 和一条 `small object` 诊断。
+- 首次真实运行发现 Panda 基座与桌体初始穿透并将球体弹出画面。通过初始
+  contact 和逐 body 像素数定位根因，将固定研究场景 Panda 基座设置为
+  `z=0.625`，并加入穿透与 60 步可见性回归测试。
+- 在 `msc-grasp` 环境和 GTX 1650 Ti 上重新运行后，三条主 prompt 全部正确：
+  鸭、方块和球体 IoU 分别为 `0.8597`、`0.8717` 和 `0.8485`，平均
+  `0.8600`；三个抓取中心均位于目标 mask 内。
+- `small object` 诊断选择红色方块，score `0.5933`，不计入三目标成功率。
+  人工图像审计确认定位框正确，但抓取框宽度普遍超出物体轮廓，因此不声称
+  物理抓取成功。
+- 新增模块 README 并记录 PyBullet 官方来源、命令、评价协议、输出和明确
+  非目标；当前 38 项 simulation 测试、完整回归 `70 passed`。
+- 多物体实现检查点提交为 `5d6cfac`、`17b3c20`、`8b32934` 和
+  `66a9611`；真实产物位于被 Git 忽略的
+  `data/processed/pybullet/multi_object_study/`。
 
 ## 2026-07-26 — 完整中文论文初稿与最终验证
 

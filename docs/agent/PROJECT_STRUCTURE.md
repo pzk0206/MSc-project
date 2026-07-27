@@ -33,18 +33,23 @@
 │   │   └── README.md
 │   └── simulation/
 │       └── pybullet/
+│           ├── README.md
 │           ├── scene.py
 │           ├── camera.py
 │           ├── perception.py
+│           ├── target_selection.py
 │           ├── visualization.py
-│           └── run_pilot.py
+│           ├── run_pilot.py
+│           └── run_multi_object_study.py
 ├── tests/
 │   └── simulation/
 │       ├── test_pybullet_camera.py
 │       ├── test_pybullet_perception.py
 │       ├── test_pybullet_smoke.py
+│       ├── test_pybullet_target_selection.py
 │       ├── test_pybullet_visualization.py
-│       └── test_pybullet_runner.py
+│       ├── test_pybullet_runner.py
+│       └── test_pybullet_multi_object_runner.py
 ├── docs/
 │   ├── agent/
 │   │   ├── CURRENT_STATUS.md
@@ -112,8 +117,11 @@
 | `src/simulation/pybullet/scene.py` | 管理确定性 PyBullet 场景、URDF 和 client 生命周期 |
 | `src/simulation/pybullet/camera.py` | 采集 RGB、米制深度、segmentation 和相机矩阵 |
 | `src/simulation/pybullet/perception.py` | 将仿真 RGB 适配到现有 Grounding DINO、几何和 CNN 接口 |
-| `src/simulation/pybullet/visualization.py` | 绘制定位框、二维抓取框和深度/分割诊断图 |
+| `src/simulation/pybullet/target_selection.py` | 使用仿真真值框事后评价多物体 prompt 目标选择，不向模型注入 segmentation |
+| `src/simulation/pybullet/visualization.py` | 绘制定位框、目标选择真值、二维抓取框和深度/分割诊断图 |
 | `src/simulation/pybullet/run_pilot.py` | 编排第一阶段仿真感知 pilot、CLI、产物和失败元数据 |
+| `src/simulation/pybullet/run_multi_object_study.py` | 一次渲染和模型加载后运行三条主 prompt 与一条 generic 诊断，并保存 CSV/JSON 和逐目标图像 |
+| `src/simulation/pybullet/README.md` | 说明仿真命令、固定协议、评价边界、官方 PyBullet 来源和输出 |
 | `docs/planning/cnn_architecture_rationale.md` | 逐项区分当前 CNN 的文献依据与工程选择 |
 | `docs/planning/modern_2d_grasp_literature_matrix.md` | 统一比较现代二维抓取方法的输入、划分、指标和可比性 |
 | `docs/agent/DISSERTATION_WRITING_GUIDE.md` | 记录论文各章节目标字数、核心内容、批判性分析要求和推荐写作顺序 |
@@ -217,6 +225,12 @@ conda run -n msc-grasp python src/vlm/analyze_backend_comparison.py
 conda run -n msc-grasp python src/simulation/pybullet/run_pilot.py \
   --backend geometry --device cuda --prompt "yellow rubber duck"
 
+# 固定三物体目标选择研究
+conda run -n msc-grasp python \
+  src/simulation/pybullet/run_multi_object_study.py \
+  --device cuda \
+  --output-dir data/processed/pybullet/multi_object_study
+
 # 运行全部测试；使用 python -m pytest 保证仓库根目录可导入
 conda run -n msc-grasp python -m pytest -q
 
@@ -287,6 +301,21 @@ data/processed/pybullet/pilot/
 ├── localization.png
 ├── prediction.png
 └── metadata.json
+
+data/processed/pybullet/multi_object_study/
+├── rgb.png
+├── depth.npy
+├── depth_visualization.png
+├── segmentation.png
+├── ground_truth_boxes.png
+├── results.csv
+├── summary.json
+├── metadata.json
+└── targets/
+    ├── duck/
+    ├── cube/
+    ├── sphere/
+    └── generic/
 ```
 
 ## 文档阅读顺序
