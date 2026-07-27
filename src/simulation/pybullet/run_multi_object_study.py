@@ -33,9 +33,16 @@ from src.simulation.pybullet.camera import (
     CameraFrame,
     capture_camera_frame,
 )
+from src.simulation.pybullet.backend_comparison import (
+    BACKEND_ORDER,
+    EXPECTED_TARGET_BACKENDS,
+    evaluate_backend_grasp,
+    summarize_backend_rows,
+)
 from src.simulation.pybullet.perception import (
     Localization,
     PilotPrediction,
+    load_cnn_backend,
     load_grounding_dino,
     localize_object,
     predict_grasp,
@@ -48,13 +55,13 @@ from src.simulation.pybullet.scene import (
 from src.simulation.pybullet.target_selection import (
     box_iou,
     evaluate_target_selection,
-    grasp_center_inside_mask,
     mask_to_box,
     segmentation_mask_for_body,
     summarize_target_rows,
 )
 from src.simulation.pybullet.visualization import (
     depth_to_uint8,
+    draw_backend_comparison,
     draw_ground_truth_boxes,
     draw_prediction,
     draw_target_evaluation,
@@ -80,6 +87,14 @@ DIAGNOSTIC_PROMPTS = (
     StudyPrompt("diagnostic", "generic", "small object"),
 )
 ALL_PROMPTS = MAIN_PROMPTS + DIAGNOSTIC_PROMPTS
+DEFAULT_SINGLE_WEIGHTS = Path(
+    "data/processed/vlm/cnn_grasp_single_head_deterministic/"
+    "cnn_grasp_model_seed_42.pt"
+)
+DEFAULT_MULTI_HEAD_WEIGHTS = Path(
+    "data/processed/vlm/cnn_grasp_multi_head_deterministic/"
+    "cnn_grasp_model_seed_42.pt"
+)
 
 
 @dataclass(frozen=True)
@@ -98,6 +113,8 @@ class MultiObjectStudyConfig:
     box_threshold: float = 0.25
     text_threshold: float = 0.25
     iou_threshold: float = 0.25
+    single_weights: Path = DEFAULT_SINGLE_WEIGHTS
+    multi_head_weights: Path = DEFAULT_MULTI_HEAD_WEIGHTS
 
 
 @dataclass(frozen=True)
@@ -110,6 +127,8 @@ class StudyOutputPaths:
     segmentation: Path
     ground_truth_boxes: Path
     results_csv: Path
+    backend_results_csv: Path
+    backend_comparison: Path
     summary: Path
     metadata: Path
     targets_dir: Path
@@ -120,6 +139,18 @@ class StudyOutputPaths:
     def prediction_image(self, target: str) -> Path:
         return self.targets_dir / target / "prediction.png"
 
+    def backend_prediction_image(
+        self,
+        target: str,
+        backend: str,
+    ) -> Path:
+        if backend not in BACKEND_ORDER:
+            raise ValueError(f"unsupported backend: {backend}")
+        return self.targets_dir / target / f"{backend}_prediction.png"
+
+    def backend_panel_image(self, target: str) -> Path:
+        return self.targets_dir / target / "backend_comparison.png"
+
 
 @dataclass(frozen=True)
 class MultiObjectStudyDependencies:
@@ -129,6 +160,7 @@ class MultiObjectStudyDependencies:
     capture_frame: Callable[[int, CameraConfig, int], CameraFrame]
     load_detector: Callable[[str, str], tuple[object, object]]
     localize: Callable[..., Localization | None]
+    load_backend: Callable[[str, Path, str], object]
     predict: Callable[..., PilotPrediction]
 
 
@@ -143,6 +175,8 @@ def build_study_output_paths(output_dir: Path) -> StudyOutputPaths:
         segmentation=root / "segmentation.png",
         ground_truth_boxes=root / "ground_truth_boxes.png",
         results_csv=root / "results.csv",
+        backend_results_csv=root / "backend_results.csv",
+        backend_comparison=root / "backend_comparison.json",
         summary=root / "summary.json",
         metadata=root / "metadata.json",
         targets_dir=root / "targets",
@@ -187,6 +221,7 @@ def default_dependencies() -> MultiObjectStudyDependencies:
         capture_frame=capture_camera_frame,
         load_detector=load_grounding_dino,
         localize=localize_object,
+        load_backend=load_cnn_backend,
         predict=predict_grasp,
     )
 
@@ -230,6 +265,14 @@ def _prepare_output_paths(paths: StudyOutputPaths) -> None:
         paths.prediction_image(prompt.requested_target).unlink(
             missing_ok=True
         )
+        paths.backend_panel_image(prompt.requested_target).unlink(
+            missing_ok=True
+        )
+        for backend in BACKEND_ORDER:
+            paths.backend_prediction_image(
+                prompt.requested_target,
+                backend,
+            ).unlink(missing_ok=True)
     for path in (
         paths.rgb,
         paths.depth,
@@ -237,6 +280,8 @@ def _prepare_output_paths(paths: StudyOutputPaths) -> None:
         paths.segmentation,
         paths.ground_truth_boxes,
         paths.results_csv,
+        paths.backend_results_csv,
+        paths.backend_comparison,
         paths.summary,
         paths.metadata,
     ):
@@ -322,6 +367,81 @@ def _write_results_csv(path: Path, rows: list[dict[str, object]]) -> None:
             )
 
 
+def _write_backend_results_csv(
+    path: Path,
+    rows: list[dict[str, object]],
+) -> None:
+    fieldnames = [
+        "target",
+        "prompt",
+        "backend",
+        "weights_path",
+        "detection_box",
+        "detection_score",
+        "center_x",
+        "center_y",
+        "width",
+        "height",
+        "angle_degrees",
+        "parameters_finite",
+        "positive_size",
+        "center_inside_target_mask",
+        "box_inside_image",
+        "backend_failure_reason",
+    ]
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(
+                {
+                    name: _csv_value(row.get(name))
+                    for name in fieldnames
+                }
+            )
+
+
+def _summarize_available_backend_rows(
+    rows: list[dict[str, object]],
+) -> dict[str, object]:
+    received = tuple(
+        (str(row["target"]), str(row["backend"]))
+        for row in rows
+    )
+    if received == EXPECTED_TARGET_BACKENDS:
+        summary = summarize_backend_rows(rows)
+        summary["backend_comparison_complete"] = True
+        return summary
+
+    counts_by_backend = {}
+    for backend in BACKEND_ORDER:
+        backend_rows = [
+            row for row in rows if row["backend"] == backend
+        ]
+        counts_by_backend[backend] = {
+            "finite_output_count": sum(
+                bool(row["parameters_finite"])
+                for row in backend_rows
+            ),
+            "center_inside_target_mask_count": sum(
+                bool(row["center_inside_target_mask"])
+                for row in backend_rows
+            ),
+            "box_inside_image_count": sum(
+                bool(row["box_inside_image"])
+                for row in backend_rows
+            ),
+        }
+    return {
+        "protocol": "fixed_three_object_three_backend_diagnostic",
+        "backend_result_count": len(rows),
+        "counts_by_backend": counts_by_backend,
+        "performance_ranking_computed": False,
+        "physical_grasp_executed": False,
+        "backend_comparison_complete": False,
+    }
+
+
 def _outputs_metadata(paths: StudyOutputPaths) -> dict[str, str]:
     return {
         "rgb": str(paths.rgb),
@@ -330,6 +450,8 @@ def _outputs_metadata(paths: StudyOutputPaths) -> dict[str, str]:
         "segmentation": str(paths.segmentation),
         "ground_truth_boxes": str(paths.ground_truth_boxes),
         "results_csv": str(paths.results_csv),
+        "backend_results_csv": str(paths.backend_results_csv),
+        "backend_comparison": str(paths.backend_comparison),
         "summary": str(paths.summary),
         "metadata": str(paths.metadata),
         "targets_dir": str(paths.targets_dir),
@@ -362,6 +484,12 @@ def run_multi_object_study(
             "Engineering gate for this fixed pilot; not the Cornell "
             "grasp rectangle metric."
         ),
+        "backend_weights": {
+            "geometry": None,
+            "single": str(config.single_weights),
+            "multi_head": str(config.multi_head_weights),
+        },
+        "performance_ranking_computed": False,
         "segmentation_used_as_model_input": False,
         "physical_grasp_executed": False,
         "outputs": _outputs_metadata(paths),
@@ -434,7 +562,25 @@ def run_multi_object_study(
             config.model_id,
             config.device,
         )
+        failure_stage = "backend_model:single"
+        single_model = dependencies.load_backend(
+            "single",
+            config.single_weights,
+            config.device,
+        )
+        failure_stage = "backend_model:multi_head"
+        multi_head_model = dependencies.load_backend(
+            "multi_head",
+            config.multi_head_weights,
+            config.device,
+        )
+        backend_models = {
+            "geometry": None,
+            "single": single_model,
+            "multi_head": multi_head_model,
+        }
         rows: list[dict[str, object]] = []
+        backend_rows: list[dict[str, object]] = []
         image_bgr = cv2.cvtColor(frame.rgb, cv2.COLOR_RGB2BGR)
         for study_prompt in ALL_PROMPTS:
             failure_stage = f"localization:{study_prompt.requested_target}"
@@ -499,44 +645,140 @@ def run_multi_object_study(
                 and bool(row["correct_target"])
                 and localization is not None
             ):
-                failure_stage = (
-                    f"grasp_prediction:{study_prompt.requested_target}"
-                )
-                prediction = dependencies.predict(
-                    image_bgr,
-                    localization,
-                    "geometry",
-                    config.device,
-                    None,
-                )
-                row["grasp"] = prediction.grasp
-                row["backend_failure_reason"] = prediction.failure_reason
-                row["grasp_center_inside_target_mask"] = (
-                    grasp_center_inside_mask(
-                        prediction.grasp,
-                        entity_masks[study_prompt.requested_target],
+                prediction_panels = {}
+                for backend in BACKEND_ORDER:
+                    failure_stage = (
+                        "grasp_prediction:"
+                        f"{study_prompt.requested_target}:{backend}"
                     )
-                )
-                _save_image(
-                    paths.prediction_image(
-                        study_prompt.requested_target
-                    ),
-                    draw_prediction(
-                        frame.rgb,
-                        localization.box,
-                        prediction.grasp,
-                        study_prompt.prompt,
-                        localization.score,
-                        "geometry",
-                    ),
-                )
+                    weights_path = {
+                        "geometry": None,
+                        "single": config.single_weights,
+                        "multi_head": config.multi_head_weights,
+                    }[backend]
+                    backend_row: dict[str, object] = {
+                        "target": study_prompt.requested_target,
+                        "prompt": study_prompt.prompt,
+                        "backend": backend,
+                        "weights_path": weights_path,
+                        "detection_box": localization.box,
+                        "detection_score": localization.score,
+                        "center_x": None,
+                        "center_y": None,
+                        "width": None,
+                        "height": None,
+                        "angle_degrees": None,
+                        "parameters_finite": False,
+                        "positive_size": False,
+                        "center_inside_target_mask": False,
+                        "box_inside_image": False,
+                        "backend_failure_reason": "",
+                    }
+                    try:
+                        prediction = dependencies.predict(
+                            image_bgr,
+                            localization,
+                            backend,
+                            config.device,
+                            backend_models[backend],
+                        )
+                        grasp = prediction.grasp
+                        audit = evaluate_backend_grasp(
+                            grasp,
+                            entity_masks[
+                                study_prompt.requested_target
+                            ],
+                            config.width,
+                            config.height,
+                        )
+                        backend_row.update(
+                            center_x=grasp["center_x"],
+                            center_y=grasp["center_y"],
+                            width=grasp["width"],
+                            height=grasp["height"],
+                            angle_degrees=grasp["angle_degrees"],
+                            **asdict(audit),
+                        )
+                        if prediction.failure_reason:
+                            backend_row["backend_failure_reason"] = (
+                                prediction.failure_reason
+                            )
+                        elif audit.failure_reason:
+                            backend_row["backend_failure_reason"] = (
+                                audit.failure_reason
+                            )
+
+                        if audit.parameters_finite and audit.positive_size:
+                            prediction_image = draw_prediction(
+                                frame.rgb,
+                                localization.box,
+                                grasp,
+                                study_prompt.prompt,
+                                localization.score,
+                                backend,
+                            )
+                            prediction_panels[backend] = prediction_image
+                            _save_image(
+                                paths.backend_prediction_image(
+                                    study_prompt.requested_target,
+                                    backend,
+                                ),
+                                prediction_image,
+                            )
+                            if backend == "geometry":
+                                _save_image(
+                                    paths.prediction_image(
+                                        study_prompt.requested_target
+                                    ),
+                                    prediction_image,
+                                )
+                                row["grasp"] = grasp
+                                row["backend_failure_reason"] = (
+                                    backend_row[
+                                        "backend_failure_reason"
+                                    ]
+                                )
+                                row[
+                                    "grasp_center_inside_target_mask"
+                                ] = audit.center_inside_target_mask
+                    except Exception as exc:
+                        backend_row["backend_failure_reason"] = str(exc)
+                    backend_rows.append(backend_row)
+
+                if tuple(prediction_panels) == BACKEND_ORDER:
+                    _save_image(
+                        paths.backend_panel_image(
+                            study_prompt.requested_target
+                        ),
+                        draw_backend_comparison(prediction_panels),
+                    )
             rows.append(row)
 
         _write_results_csv(paths.results_csv, rows)
+        _write_backend_results_csv(
+            paths.backend_results_csv,
+            backend_rows,
+        )
+        backend_summary = _summarize_available_backend_rows(
+            backend_rows
+        )
+        _write_json(paths.backend_comparison, backend_summary)
         summary = summarize_target_rows(rows)
+        summary.update(
+            backend_comparison_complete=backend_summary[
+                "backend_comparison_complete"
+            ],
+            backend_comparison=backend_summary,
+        )
         summary["status"] = "success"
         _write_json(paths.summary, summary)
-        metadata.update(status="success", results=rows, summary=summary)
+        metadata.update(
+            status="success",
+            results=rows,
+            backend_results=backend_rows,
+            backend_comparison=backend_summary,
+            summary=summary,
+        )
         _write_json(paths.metadata, metadata)
         return _json_safe(summary)
     except Exception as exc:
@@ -585,6 +827,16 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--height", type=int, default=480)
     parser.add_argument("--box-threshold", type=float, default=0.25)
     parser.add_argument("--text-threshold", type=float, default=0.25)
+    parser.add_argument(
+        "--single-weights",
+        type=Path,
+        default=DEFAULT_SINGLE_WEIGHTS,
+    )
+    parser.add_argument(
+        "--multi-head-weights",
+        type=Path,
+        default=DEFAULT_MULTI_HEAD_WEIGHTS,
+    )
     return parser
 
 
@@ -603,6 +855,8 @@ def main() -> int:
             height=args.height,
             box_threshold=args.box_threshold,
             text_threshold=args.text_threshold,
+            single_weights=args.single_weights,
+            multi_head_weights=args.multi_head_weights,
         )
     )
     print(

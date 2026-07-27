@@ -81,7 +81,8 @@ def test_multi_object_runner_uses_one_frame_and_model_and_gates_grasp(
     _FakeMultiObjectScene.instances.clear()
     detector_loads: list[tuple[str, str]] = []
     captures: list[int] = []
-    predicted_labels: list[str] = []
+    backend_loads: list[tuple[str, Path, str]] = []
+    prediction_calls: list[tuple[str, str, object, int]] = []
     localizations = {
         "yellow rubber duck": Localization(
             box=(5, 20, 14, 29),
@@ -113,6 +114,10 @@ def test_multi_object_runner_uses_one_frame_and_model_and_gates_grasp(
         detector_loads.append((model_id, device))
         return "processor", "detector"
 
+    def load_backend(backend, weights_path, device):
+        backend_loads.append((backend, weights_path, device))
+        return f"{backend}-model"
+
     def localize(
         *,
         rgb_path,
@@ -126,7 +131,14 @@ def test_multi_object_runner_uses_one_frame_and_model_and_gates_grasp(
         return localizations[prompt]
 
     def predict(image_bgr, localization, backend, device, model):
-        predicted_labels.append(localization.label)
+        prediction_calls.append(
+            (
+                localization.label,
+                backend,
+                model,
+                id(localization),
+            )
+        )
         return PilotPrediction(
             localization=localization,
             backend=backend,
@@ -143,18 +155,20 @@ def test_multi_object_runner_uses_one_frame_and_model_and_gates_grasp(
             },
         )
 
+    config = MultiObjectStudyConfig(
+        output_dir=tmp_path,
+        width=80,
+        height=60,
+        device="cpu",
+    )
     summary = run_multi_object_study(
-        MultiObjectStudyConfig(
-            output_dir=tmp_path,
-            width=80,
-            height=60,
-            device="cpu",
-        ),
+        config,
         dependencies=MultiObjectStudyDependencies(
             scene_factory=_FakeMultiObjectScene,
             capture_frame=capture_frame,
             load_detector=load_detector,
             localize=localize,
+            load_backend=load_backend,
             predict=predict,
         ),
     )
@@ -163,9 +177,36 @@ def test_multi_object_runner_uses_one_frame_and_model_and_gates_grasp(
     assert summary["main_target_count"] == 3
     assert summary["correct_target_count"] == 2
     assert summary["generic_diagnostic"]["best_matching_target"] == "robot"
+    assert summary["backend_comparison_complete"] is False
     assert len(detector_loads) == 1
     assert len(captures) == 1
-    assert predicted_labels == ["duck", "sphere"]
+    assert backend_loads == [
+        ("single", config.single_weights, "cpu"),
+        ("multi_head", config.multi_head_weights, "cpu"),
+    ]
+    assert [
+        (target, backend, model)
+        for target, backend, model, _ in prediction_calls
+    ] == [
+        ("duck", "geometry", None),
+        ("duck", "single", "single-model"),
+        ("duck", "multi_head", "multi_head-model"),
+        ("sphere", "geometry", None),
+        ("sphere", "single", "single-model"),
+        ("sphere", "multi_head", "multi_head-model"),
+    ]
+    duck_localization_ids = {
+        localization_id
+        for target, _, _, localization_id in prediction_calls
+        if target == "duck"
+    }
+    sphere_localization_ids = {
+        localization_id
+        for target, _, _, localization_id in prediction_calls
+        if target == "sphere"
+    }
+    assert len(duck_localization_ids) == 1
+    assert len(sphere_localization_ids) == 1
     assert _FakeMultiObjectScene.instances[-1].steps == 60
     assert _FakeMultiObjectScene.instances[-1].closed
 
@@ -186,19 +227,75 @@ def test_multi_object_runner_uses_one_frame_and_model_and_gates_grasp(
             paths.segmentation,
             paths.ground_truth_boxes,
             paths.results_csv,
+            paths.backend_results_csv,
+            paths.backend_comparison,
             paths.summary,
             paths.metadata,
         )
     )
+    with paths.backend_results_csv.open(
+        newline="",
+        encoding="utf-8",
+    ) as handle:
+        backend_rows = list(csv.DictReader(handle))
+    assert [
+        (row["target"], row["backend"])
+        for row in backend_rows
+    ] == [
+        ("duck", "geometry"),
+        ("duck", "single"),
+        ("duck", "multi_head"),
+        ("sphere", "geometry"),
+        ("sphere", "single"),
+        ("sphere", "multi_head"),
+    ]
     assert paths.evaluation_image("cube").is_file()
     assert paths.prediction_image("duck").is_file()
     assert not paths.prediction_image("cube").exists()
     assert paths.prediction_image("sphere").is_file()
+    for target in ("duck", "sphere"):
+        for backend in ("geometry", "single", "multi_head"):
+            assert paths.backend_prediction_image(
+                target,
+                backend,
+            ).is_file()
+        assert paths.backend_panel_image(target).is_file()
+    assert not paths.backend_panel_image("cube").exists()
 
     metadata = json.loads(paths.metadata.read_text(encoding="utf-8"))
     assert metadata["status"] == "success"
     assert metadata["segmentation_used_as_model_input"] is False
     assert metadata["physical_grasp_executed"] is False
+    assert metadata["backend_weights"] == {
+        "geometry": None,
+        "single": str(config.single_weights),
+        "multi_head": str(config.multi_head_weights),
+    }
+
+
+def test_backend_output_paths_and_seed_42_defaults(tmp_path: Path) -> None:
+    config = MultiObjectStudyConfig()
+    paths = build_study_output_paths(tmp_path)
+
+    assert config.single_weights == Path(
+        "data/processed/vlm/cnn_grasp_single_head_deterministic/"
+        "cnn_grasp_model_seed_42.pt"
+    )
+    assert config.multi_head_weights == Path(
+        "data/processed/vlm/cnn_grasp_multi_head_deterministic/"
+        "cnn_grasp_model_seed_42.pt"
+    )
+    assert paths.backend_results_csv == tmp_path / "backend_results.csv"
+    assert paths.backend_comparison == tmp_path / "backend_comparison.json"
+    assert paths.backend_prediction_image("duck", "single") == (
+        tmp_path / "targets/duck/single_prediction.png"
+    )
+    assert paths.backend_panel_image("duck") == (
+        tmp_path / "targets/duck/backend_comparison.png"
+    )
+    assert paths.prediction_image("duck") == (
+        tmp_path / "targets/duck/prediction.png"
+    )
 
 
 def test_multi_object_cli_help_runs_from_repository_root() -> None:
@@ -217,3 +314,5 @@ def test_multi_object_cli_help_runs_from_repository_root() -> None:
     assert completed.returncode == 0, completed.stderr
     assert "--device" in completed.stdout
     assert "--output-dir" in completed.stdout
+    assert "--single-weights" in completed.stdout
+    assert "--multi-head-weights" in completed.stdout
