@@ -10,8 +10,9 @@
 五折均已完成。两个架构的 885 条合并预测和成对比较已经独立审计。中文论文
 初稿、数字、引用和 PDF 已验证。导师建议的 PyBullet 第一阶段感知 pilot
 及固定三物体目标选择研究均已完成真实 GPU 验证。三条明确 prompt 通过当前
-二维感知门控；当前重心是把仿真结果写成有边界的可行性证据，并在需要时进入
-深度反投影和机械臂执行设计，而不是把二维结果称为物理抓取成功。
+二维感知门控；geometry、正式 single seed 42 和正式 multi-head seed 42
+也已对同一定位框完成仿真接口检查。当前重心是把结果写成有边界的可行性证据，
+并在需要时进入深度反投影和机械臂执行设计，而不是把二维结果称为物理抓取成功。
 
 ## 已完成的实验流程
 
@@ -84,7 +85,7 @@ Object-wise 需要图像到物体实例的权威映射；当前数据和已检�
 - PyBullet `3.2.7`、API `202010061` 已安装到 `msc-grasp` 环境。
 - 沙箱内无法访问 GPU，`torch.cuda.is_available()` 为 `False`；同一 Conda
   环境在沙箱外验证为 `True`，设备为 `NVIDIA GeForce GTX 1650 Ti`。
-- 当前共有 38 项 simulation 测试；完整项目回归为 `70 passed`。
+- 当前共有 51 项 simulation 测试；完整项目回归为 `83 passed`。
 - DIRECT + TinyRenderer + CUDA 的真实 geometry pilot 成功生成 640×480
   RGB、深度、segmentation、定位、预测和 metadata。
 - 默认 generic prompt `small object` 返回了可见框，但人工检查确认它框住
@@ -107,6 +108,17 @@ Object-wise 需要图像到物体实例的权威映射；当前数据和已检�
   `data/processed/pybullet/multi_object_study/`；metadata 保持
   `segmentation_used_as_model_input: false` 和
   `physical_grasp_executed: false`。
+- geometry、single seed 42 和 multi-head seed 42 在三条正确目标上复用
+  同一 RGB 与同一定位框，共生成九条后端诊断。九组参数均有限、宽高为正、
+  抓取中心位于各自目标 mask 内，旋转框均保持在 640×480 图像范围内。
+- 鸭子上，geometry 为 `0°` 且框较宽，single 为 `-76.23°`，multi-head
+  为 `-84.19°`；两个 CNN 框在图像中明显更紧。
+- 方块上，geometry、single、multi-head 角度分别为 `0°`、`-42.67°` 和
+  `-6.18°`；球体上分别为 `-90°`、`-4.73°` 和 `3.87°`。球体近似对称，
+  不能根据方向差异判定哪个后端更好。
+- 该单场景没有仿真抓取真值，`backend_comparison.json` 明确保持
+  `performance_ranking_computed: false`；九个框通过几何检查不等于物理
+  抓取成功。
 
 ## 已确认的主要发现
 
@@ -145,9 +157,10 @@ Object-wise 需要图像到物体实例的权威映射；当前数据和已检�
 直接回归、密集生成、开放词汇定位和语言驱动抓取；当前轻量网络明确定位为
 432,454 参数的受控回归基线，不声称为新颖架构或最新水平。
 
-固定多物体 prompt 策略、模块 README、真实产物和人工审计已经完成。当前
-二维感知门控已通过；若继续机械臂抓取，下一阶段应独立设计深度像素反投影、
-目标表面抓取点、夹爪姿态、IK、碰撞检查和物理执行，并新增对应成功判据。
+固定多物体 prompt 策略、三后端接口、模块 README、真实产物和人工审计已经
+完成。当前二维感知与后端接口门控已通过；若继续机械臂抓取，下一阶段应独立
+设计深度像素反投影、目标表面抓取点、夹爪姿态、IK、碰撞检查和物理执行，
+并新增对应成功判据。
 论文仍优先逐章检查论证口吻、导师要求、最终提交语言及参考文献格式；不重新
 运行数字未受影响的 Cornell 正式实验。
 
@@ -172,6 +185,8 @@ Object-wise 需要图像到物体实例的权威映射；当前数据和已检�
 9. 多物体研究的 segmentation 只作事后真值评价。`0.25` 是固定 pilot 的
    目标框 IoU 工程门槛，不是 Cornell 抓取矩形指标；generic prompt 只作
    诊断，不进入三目标成功率。
+10. 仿真三后端检查固定使用正式 single/multi-head seed 42 权重。没有仿真
+    抓取真值时，只报告有限性、中心 mask 和图像边界，不对后端进行性能排名。
 
 ### 后续工作顺序
 

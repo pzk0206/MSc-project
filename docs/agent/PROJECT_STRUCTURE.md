@@ -37,6 +37,7 @@
 │           ├── scene.py
 │           ├── camera.py
 │           ├── perception.py
+│           ├── backend_comparison.py
 │           ├── target_selection.py
 │           ├── visualization.py
 │           ├── run_pilot.py
@@ -44,6 +45,7 @@
 ├── tests/
 │   └── simulation/
 │       ├── test_pybullet_camera.py
+│       ├── test_pybullet_backend_comparison.py
 │       ├── test_pybullet_perception.py
 │       ├── test_pybullet_smoke.py
 │       ├── test_pybullet_target_selection.py
@@ -117,6 +119,7 @@
 | `src/simulation/pybullet/scene.py` | 管理确定性 PyBullet 场景、URDF 和 client 生命周期 |
 | `src/simulation/pybullet/camera.py` | 采集 RGB、米制深度、segmentation 和相机矩阵 |
 | `src/simulation/pybullet/perception.py` | 将仿真 RGB 适配到现有 Grounding DINO、几何和 CNN 接口 |
+| `src/simulation/pybullet/backend_comparison.py` | 对三后端中心格式抓取框做有限性、目标 mask 和图像边界诊断，不生成性能排名 |
 | `src/simulation/pybullet/target_selection.py` | 使用仿真真值框事后评价多物体 prompt 目标选择，不向模型注入 segmentation |
 | `src/simulation/pybullet/visualization.py` | 绘制定位框、目标选择真值、二维抓取框和深度/分割诊断图 |
 | `src/simulation/pybullet/run_pilot.py` | 编排第一阶段仿真感知 pilot、CLI、产物和失败元数据 |
@@ -309,6 +312,8 @@ data/processed/pybullet/multi_object_study/
 ├── segmentation.png
 ├── ground_truth_boxes.png
 ├── results.csv
+├── backend_results.csv
+├── backend_comparison.json
 ├── summary.json
 ├── metadata.json
 └── targets/

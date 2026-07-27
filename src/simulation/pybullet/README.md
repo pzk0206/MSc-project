@@ -25,6 +25,18 @@ conda run -n msc-grasp python \
   --output-dir data/processed/pybullet/multi_object_study
 ```
 
+该命令还会在三个正确目标上并列运行：
+
+- `geometry`；
+- `single`：
+  `data/processed/vlm/cnn_grasp_single_head_deterministic/cnn_grasp_model_seed_42.pt`；
+- `multi_head`：
+  `data/processed/vlm/cnn_grasp_multi_head_deterministic/cnn_grasp_model_seed_42.pt`。
+
+两个 CNN 各加载一次，三个后端复用完全相同的 RGB 和 Grounding DINO
+`Localization`。如需显式复现其他已知权重路径，可用 `--single-weights` 和
+`--multi-head-weights`；程序不会自动换 seed 或回退到 geometry。
+
 沙箱可能隐藏 `/dev/dxg`，使同一 Conda 环境中的
 `torch.cuda.is_available()` 返回 `False`。请求 `--device cuda` 时程序会
 直接失败，不会静默回退 CPU；真实 GPU 运行应在可访问显卡的环境中执行。
@@ -62,14 +74,32 @@ data/processed/pybullet/multi_object_study/
 ├── segmentation.png
 ├── ground_truth_boxes.png
 ├── results.csv
+├── backend_results.csv
+├── backend_comparison.json
 ├── summary.json
 ├── metadata.json
 └── targets/
-    ├── duck/{evaluation.png,prediction.png}
-    ├── cube/{evaluation.png,prediction.png}
-    ├── sphere/{evaluation.png,prediction.png}
+    ├── duck/
+    ├── cube/
+    ├── sphere/
     └── generic/evaluation.png
 ```
+
+三个 main 目标目录各包含：
+
+```text
+evaluation.png
+prediction.png
+geometry_prediction.png
+single_prediction.png
+multi_head_prediction.png
+backend_comparison.png
+```
+
+`prediction.png` 与 `geometry_prediction.png` 内容相同，前者保留旧输出兼容性。
+`backend_results.csv` 每个目标和后端一行，记录有限性、正尺寸、中心是否在
+目标 mask 以及旋转框是否在图像范围内。`backend_comparison.json` 只汇总
+这些几何诊断，不使用 Cornell 真值、不生成最佳后端或性能排名。
 
 `depth.npy` 保存米制深度；PNG 深度图只是固定近远裁剪面的诊断显示。
 `metadata.json` 明确记录：
@@ -77,6 +107,7 @@ data/processed/pybullet/multi_object_study/
 ```json
 {
   "segmentation_used_as_model_input": false,
+  "performance_ranking_computed": false,
   "physical_grasp_executed": false
 }
 ```

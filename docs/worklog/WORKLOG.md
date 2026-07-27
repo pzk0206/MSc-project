@@ -39,6 +39,18 @@
 - 多物体实现检查点提交为 `5d6cfac`、`17b3c20`、`8b32934` 和
   `66a9611`；真实产物位于被 Git 忽略的
   `data/processed/pybullet/multi_object_study/`。
+- 固定选择正式 single seed 42 和 multi-head seed 42，与 geometry 对同一
+  RGB 和同一定位框做并列接口检查；两个 CNN 各加载一次。
+- 新增纯后端几何审计、九行 `backend_results.csv`、非排名
+  `backend_comparison.json`、每目标三张后端图和一张并列图；保留
+  `prediction.png` 作为 geometry 兼容输出。
+- 真实 GTX 1650 Ti 运行中，九组参数均有限且宽高为正，九个中心全部位于
+  对应目标 mask，九个旋转框全部在图像内；独立重算与 CSV 标志完全一致。
+- 人工检查显示 geometry 在鸭和方块上框更宽；single/multi-head 在鸭上接近
+  竖直，在球上接近水平。由于没有仿真抓取真值，不进行性能排名或成功率解释。
+- 三后端阶段新增检查点提交 `3bf854e`、`42cfa05`、`bd4ceea`、
+  `0c6478e` 和 `3377984`；当前 51 项 simulation 测试，完整回归
+  `83 passed`。
 
 ## 2026-07-26 — 完整中文论文初稿与最终验证
 
