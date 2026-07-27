@@ -9,6 +9,26 @@ import cv2
 import numpy as np
 
 
+_ENTITY_COLORS_BGR = {
+    "duck": (0, 255, 255),
+    "cube": (0, 0, 255),
+    "sphere": (0, 255, 0),
+    "robot": (255, 0, 255),
+}
+_DETECTION_COLOR_BGR = (255, 0, 0)
+
+
+def _validated_rgb(rgb: np.ndarray) -> np.ndarray:
+    rgb_array = np.asarray(rgb)
+    if (
+        rgb_array.ndim != 3
+        or rgb_array.shape[2] != 3
+        or rgb_array.dtype != np.uint8
+    ):
+        raise ValueError("RGB image must have shape (H, W, 3) and dtype uint8")
+    return rgb_array
+
+
 def validate_detection_box(
     box: tuple[float, float, float, float],
     image_width: int,
@@ -91,6 +111,101 @@ def segmentation_to_bgr(segmentation: np.ndarray) -> np.ndarray:
     return output
 
 
+def draw_ground_truth_boxes(
+    rgb: np.ndarray,
+    boxes: Mapping[str, tuple[int, int, int, int]],
+) -> np.ndarray:
+    """Draw fixed-color evaluation truth boxes on an RGB frame."""
+
+    rgb_array = _validated_rgb(rgb)
+    image = cv2.cvtColor(rgb_array.copy(), cv2.COLOR_RGB2BGR)
+    height, width = rgb_array.shape[:2]
+    for name, box in boxes.items():
+        x1, y1, x2, y2 = validate_detection_box(box, width, height)
+        color = _ENTITY_COLORS_BGR.get(name, (255, 255, 255))
+        start = int(round(x1)), int(round(y1))
+        end = int(round(x2)), int(round(y2))
+        cv2.rectangle(image, start, end, color, 1)
+        cv2.putText(
+            image,
+            name,
+            (start[0], max(0, start[1] - 3)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.35,
+            color,
+            1,
+            cv2.LINE_AA,
+        )
+    return image
+
+
+def draw_target_evaluation(
+    rgb: np.ndarray,
+    requested_target: str,
+    prompt: str,
+    detection_box: tuple[int, int, int, int] | None,
+    ground_truth_boxes: Mapping[str, tuple[int, int, int, int]],
+    best_matching_target: str | None,
+    score: float | None,
+) -> np.ndarray:
+    """Draw one prompt's requested truth, best match, and predicted box."""
+
+    rgb_array = _validated_rgb(rgb)
+    image = cv2.cvtColor(rgb_array.copy(), cv2.COLOR_RGB2BGR)
+    height, width = rgb_array.shape[:2]
+
+    highlighted = [
+        ("requested", requested_target),
+        ("best", best_matching_target),
+    ]
+    for role, name in highlighted:
+        if name is None or name not in ground_truth_boxes:
+            continue
+        x1, y1, x2, y2 = validate_detection_box(
+            ground_truth_boxes[name],
+            width,
+            height,
+        )
+        color = _ENTITY_COLORS_BGR.get(name, (255, 255, 255))
+        cv2.rectangle(
+            image,
+            (int(round(x1)), int(round(y1))),
+            (int(round(x2)), int(round(y2))),
+            color,
+            1 if role == "requested" else 2,
+        )
+
+    if detection_box is not None:
+        x1, y1, x2, y2 = validate_detection_box(
+            detection_box,
+            width,
+            height,
+        )
+        cv2.rectangle(
+            image,
+            (int(round(x1)), int(round(y1))),
+            (int(round(x2)), int(round(y2))),
+            _DETECTION_COLOR_BGR,
+            1,
+        )
+
+    score_text = "none" if score is None else f"{score:.3f}"
+    cv2.putText(
+        image,
+        (
+            f"{prompt} | requested={requested_target} | "
+            f"best={best_matching_target or 'none'} | score={score_text}"
+        ),
+        (5, height - 8),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.35,
+        (255, 255, 255),
+        1,
+        cv2.LINE_AA,
+    )
+    return image
+
+
 def draw_prediction(
     rgb: np.ndarray,
     localization_box: tuple[float, float, float, float],
@@ -101,13 +216,7 @@ def draw_prediction(
 ) -> np.ndarray:
     """Draw localization and centre-format grasp prediction in BGR."""
 
-    rgb_array = np.asarray(rgb)
-    if (
-        rgb_array.ndim != 3
-        or rgb_array.shape[2] != 3
-        or rgb_array.dtype != np.uint8
-    ):
-        raise ValueError("RGB image must have shape (H, W, 3) and dtype uint8")
+    rgb_array = _validated_rgb(rgb)
     image_height, image_width = rgb_array.shape[:2]
     x1, y1, x2, y2 = validate_detection_box(
         localization_box,

@@ -3,7 +3,9 @@ import pytest
 
 from src.simulation.pybullet.visualization import (
     depth_to_uint8,
+    draw_ground_truth_boxes,
     draw_prediction,
+    draw_target_evaluation,
     grasp_box_points,
     segmentation_to_bgr,
     validate_detection_box,
@@ -84,3 +86,45 @@ def test_draw_prediction_returns_bgr_without_mutating_rgb() -> None:
     assert drawn.shape == rgb.shape
     assert drawn[0, 0].tolist() == [0, 0, 255]
     assert np.any(drawn != np.array([0, 0, 255], dtype=np.uint8))
+
+
+def test_draw_ground_truth_boxes_uses_distinct_fixed_colors() -> None:
+    rgb = np.zeros((80, 100, 3), dtype=np.uint8)
+    original = rgb.copy()
+    boxes = {
+        "duck": (5, 5, 15, 15),
+        "cube": (25, 5, 35, 15),
+        "sphere": (45, 5, 55, 15),
+        "robot": (65, 5, 85, 25),
+    }
+
+    drawn = draw_ground_truth_boxes(rgb, boxes)
+
+    assert np.array_equal(rgb, original)
+    assert drawn.dtype == np.uint8
+    assert drawn.shape == rgb.shape
+    colors = {tuple(drawn[5, x]) for x in (5, 25, 45, 65)}
+    assert len(colors) == 4
+
+
+def test_draw_target_evaluation_shows_truth_match_and_detection() -> None:
+    rgb = np.zeros((80, 100, 3), dtype=np.uint8)
+    boxes = {
+        "duck": (5, 5, 20, 20),
+        "robot": (60, 30, 90, 70),
+    }
+
+    drawn = draw_target_evaluation(
+        rgb=rgb,
+        requested_target="duck",
+        prompt="yellow rubber duck",
+        detection_box=(62, 32, 88, 68),
+        ground_truth_boxes=boxes,
+        best_matching_target="robot",
+        score=0.75,
+    )
+
+    assert np.any(drawn[5, 5])
+    assert np.any(drawn[30, 60])
+    assert np.any(drawn[32, 62])
+    assert np.count_nonzero(drawn) > 100
