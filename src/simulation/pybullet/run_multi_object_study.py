@@ -155,6 +155,7 @@ def fixed_scene_config(config: MultiObjectStudyConfig) -> SceneConfig:
     return SceneConfig(
         gui=config.gui,
         seed=config.seed,
+        robot_position=(0.0, 0.0, 0.625),
         object_name="duck",
         object_urdf="duck_vhacd.urdf",
         object_position=(0.52, -0.18, 0.67),

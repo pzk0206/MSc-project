@@ -1,4 +1,5 @@
 import numpy as np
+import pybullet as p
 import pytest
 
 from src.simulation.pybullet.camera import (
@@ -9,6 +10,10 @@ from src.simulation.pybullet.scene import (
     PyBulletScene,
     SceneConfig,
     SceneObjectConfig,
+)
+from src.simulation.pybullet.run_multi_object_study import (
+    MultiObjectStudyConfig,
+    fixed_scene_config,
 )
 
 
@@ -127,3 +132,31 @@ def test_scene_rejects_duplicate_object_names_and_closes() -> None:
         scene.connect()
 
     assert not scene.is_connected
+
+
+def test_fixed_study_robot_does_not_penetrate_table_or_eject_targets() -> None:
+    scene = PyBulletScene(
+        fixed_scene_config(MultiObjectStudyConfig(device="cpu"))
+    ).connect()
+    try:
+        p.performCollisionDetection(physicsClientId=scene.client_id)
+        robot_table_contacts = p.getContactPoints(
+            bodyA=scene.bodies.robot,
+            bodyB=scene.bodies.table,
+            physicsClientId=scene.client_id,
+        )
+        assert not robot_table_contacts
+
+        scene.step(60)
+        frame = capture_camera_frame(
+            scene.client_id,
+            CameraConfig(width=320, height=240),
+            scene.renderer,
+        )
+        body_ids = frame.segmentation & ((1 << 24) - 1)
+        for body_id in scene.object_body_ids.values():
+            assert np.any(
+                (frame.segmentation >= 0) & (body_ids == body_id)
+            )
+    finally:
+        scene.close()
