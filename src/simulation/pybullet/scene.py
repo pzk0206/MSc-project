@@ -18,6 +18,17 @@ import pybullet_data
 
 
 @dataclass(frozen=True)
+class SceneObjectConfig:
+    """Configuration for one additional named scene object."""
+
+    name: str
+    urdf: str
+    position: tuple[float, float, float]
+    yaw_degrees: float = 0.0
+    rgba: tuple[float, float, float, float] | None = None
+
+
+@dataclass(frozen=True)
 class SceneConfig:
     """Fixed scene resources and initial poses."""
 
@@ -30,6 +41,9 @@ class SceneConfig:
     object_urdf: str = "duck_vhacd.urdf"
     object_position: tuple[float, float, float] = (0.55, 0.0, 0.66)
     object_yaw_degrees: float = 20.0
+    object_name: str = "target_object"
+    object_rgba: tuple[float, float, float, float] | None = None
+    additional_objects: tuple[SceneObjectConfig, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -40,6 +54,7 @@ class SceneBodies:
     table: int
     robot: int
     target_object: int
+    additional_objects: tuple[tuple[str, int], ...] = ()
 
 
 class PyBulletScene:
@@ -61,8 +76,42 @@ class PyBulletScene:
     def is_connected(self) -> bool:
         return self.client_id >= 0 and bool(p.isConnected(self.client_id))
 
-    def _resolve_object_urdf(self) -> Path:
-        object_path = Path(self.config.object_urdf)
+    @property
+    def object_body_ids(self) -> dict[str, int]:
+        """Map configured object names to their loaded body IDs."""
+
+        bodies = self.bodies
+        return {
+            self.config.object_name: bodies.target_object,
+            **dict(bodies.additional_objects),
+        }
+
+    def object_poses(
+        self,
+    ) -> dict[
+        str,
+        dict[
+            str,
+            tuple[float, ...],
+        ],
+    ]:
+        """Return current world pose for every named scene object."""
+
+        poses = {}
+        for name, body_id in self.object_body_ids.items():
+            position, orientation = p.getBasePositionAndOrientation(
+                body_id,
+                physicsClientId=self.client_id,
+            )
+            poses[name] = {
+                "position": tuple(float(value) for value in position),
+                "orientation": tuple(float(value) for value in orientation),
+            }
+        return poses
+
+    @staticmethod
+    def _resolve_object_urdf(urdf: str) -> Path:
+        object_path = Path(urdf)
         data_root = Path(pybullet_data.getDataPath()).resolve()
         if object_path.is_absolute():
             raise ValueError("object_urdf must resolve inside pybullet_data")
@@ -75,10 +124,67 @@ class PyBulletScene:
             )
         return candidate
 
+    @staticmethod
+    def _validate_rgba(
+        rgba: tuple[float, float, float, float] | None,
+    ) -> None:
+        if rgba is None:
+            return
+        if len(rgba) != 4:
+            raise ValueError("object RGBA must contain four values")
+        if not all(math.isfinite(value) and 0.0 <= value <= 1.0 for value in rgba):
+            raise ValueError("object RGBA values must be finite and within [0, 1]")
+
+    def _object_configs(self) -> tuple[SceneObjectConfig, ...]:
+        objects = (
+            SceneObjectConfig(
+                name=self.config.object_name,
+                urdf=self.config.object_urdf,
+                position=self.config.object_position,
+                yaw_degrees=self.config.object_yaw_degrees,
+                rgba=self.config.object_rgba,
+            ),
+            *self.config.additional_objects,
+        )
+        names = [obj.name for obj in objects]
+        if any(not name.strip() for name in names):
+            raise ValueError("object names must be non-empty")
+        if len(names) != len(set(names)):
+            duplicate = next(
+                name for index, name in enumerate(names) if name in names[:index]
+            )
+            raise ValueError(f"duplicate scene object name: {duplicate}")
+        for obj in objects:
+            self._validate_rgba(obj.rgba)
+            self._resolve_object_urdf(obj.urdf)
+        return objects
+
+    def _load_object(self, config: SceneObjectConfig) -> int:
+        orientation = p.getQuaternionFromEuler(
+            (0.0, 0.0, math.radians(config.yaw_degrees))
+        )
+        body_id = int(
+            p.loadURDF(
+                str(self._resolve_object_urdf(config.urdf)),
+                basePosition=config.position,
+                baseOrientation=orientation,
+                physicsClientId=self.client_id,
+            )
+        )
+        if config.rgba is not None:
+            p.changeVisualShape(
+                body_id,
+                -1,
+                rgbaColor=config.rgba,
+                physicsClientId=self.client_id,
+            )
+        return body_id
+
     def connect(self) -> "PyBulletScene":
         if self.is_connected:
             return self
 
+        object_configs = self._object_configs()
         connection_mode = p.GUI if self.config.gui else p.DIRECT
         self.client_id = int(p.connect(connection_mode))
         if self.client_id < 0:
@@ -86,7 +192,6 @@ class PyBulletScene:
 
         try:
             data_root = pybullet_data.getDataPath()
-            object_urdf = self._resolve_object_urdf()
             p.setAdditionalSearchPath(
                 data_root,
                 physicsClientId=self.client_id,
@@ -119,14 +224,10 @@ class PyBulletScene:
                 useFixedBase=True,
                 physicsClientId=self.client_id,
             )
-            object_orientation = p.getQuaternionFromEuler(
-                (0.0, 0.0, math.radians(self.config.object_yaw_degrees))
-            )
-            target_object = p.loadURDF(
-                str(object_urdf),
-                basePosition=self.config.object_position,
-                baseOrientation=object_orientation,
-                physicsClientId=self.client_id,
+            target_object = self._load_object(object_configs[0])
+            additional_objects = tuple(
+                (config.name, self._load_object(config))
+                for config in object_configs[1:]
             )
             self.renderer = (
                 p.ER_BULLET_HARDWARE_OPENGL
@@ -138,6 +239,7 @@ class PyBulletScene:
                 table=int(table),
                 robot=int(robot),
                 target_object=int(target_object),
+                additional_objects=additional_objects,
             )
         except Exception:
             self.close()
