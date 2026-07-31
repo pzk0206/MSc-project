@@ -51,7 +51,7 @@
 - Produces: `ReprojectedPoint(pixel_x, pixel_y, depth_m)`
 - Produces: `sample_nearest_depth(depth_m, center_x, center_y, near, far) -> DepthSample`
 - Produces: `metric_depth_to_buffer(depth_m, near, far) -> float`
-- Produces: `backproject_pixel(column, row, depth_m, width, height, view_matrix, projection_matrix) -> BackprojectedPoint`
+- Produces: `backproject_pixel(column, row, depth_m, width, height, view_matrix, projection_matrix, near, far) -> BackprojectedPoint`
 - Produces: `reproject_world_point(world_xyz, width, height, view_matrix, projection_matrix) -> ReprojectedPoint`
 
 - [ ] **Step 1: Write failing nearest-depth tests**
@@ -228,6 +228,8 @@ def test_backprojection_recovers_hand_derived_world_point() -> None:
         height=1,
         view_matrix=view,
         projection_matrix=projection,
+        near=0.1,
+        far=10.0,
     )
 
     assert point.camera_xyz == pytest.approx((0.0, 0.0, -0.5), abs=1e-6)
