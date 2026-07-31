@@ -423,8 +423,10 @@ conda run -n msc-grasp python src/vlm/analyze_backend_comparison.py
 \begin{lstlisting}
 data/processed/baseline_cv/cv_baseline_summary.json
 data/processed/vlm/grasp/vlm_assisted_grasp_summary.json
-data/processed/vlm/cnn_grasp/multi_run_summary.json
-data/processed/vlm/cnn_grasp/cnn_grasp_predictions.csv
+data/processed/vlm/cnn_grasp_single_head_deterministic/
+  multi_run_summary.json
+data/processed/vlm/cnn_grasp_multi_head_deterministic/
+  multi_run_summary.json
 data/processed/vlm/cnn_cross_validation/image_wise_folds_seed_42.json
 data/processed/vlm/cnn_cross_validation/single/combined_predictions.csv
 data/processed/vlm/cnn_cross_validation/single/cross_validation_summary.json
