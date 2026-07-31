@@ -61,8 +61,15 @@ DINO、几何抓取后端或模型 prompt。主目标判为正确需同时满足
 prompt 不计入三目标成功率。无检测、低 IoU、选错物体和并列匹配都保留为
 实验结果，不通过 segmentation 修正模型输出。
 
-只有正确选择的主目标会进入现有 `geometry` 二维抓取后端。系统检查抓取中心
-是否位于目标 mask 内，但不把这一检查表述为抓取成功。
+只有正确选择的主目标会进入三个二维抓取后端。系统先检查抓取中心是否位于
+目标 mask 内，再以最近像素深度和保存的 PyBullet view/projection 矩阵恢复
+相机与世界坐标。segmentation 和 `rayTest` 只在坐标产生后作真值审计，绝不
+用于移动、修正或选择三维点。
+
+固定九点门控要求三个目标乘三个后端的结果完整且顺序确定，并逐点满足：深度
+有限且位于裁剪面之间、坐标有限、重投影误差不超过 1 pixel、深度往返误差
+不超过 `1e-4 m`、segmentation body 与目标一致、射线首次命中目标 body。
+该门控验证二维中心到目标表面三维点的转换，不等同于抓取位姿或抓取成功。
 
 ## 输出
 
@@ -76,6 +83,8 @@ data/processed/pybullet/multi_object_study/
 ├── results.csv
 ├── backend_results.csv
 ├── backend_comparison.json
+├── backprojection_results.csv
+├── backprojection_summary.json
 ├── summary.json
 ├── metadata.json
 └── targets/
@@ -101,12 +110,22 @@ backend_comparison.png
 目标 mask 以及旋转框是否在图像范围内。`backend_comparison.json` 只汇总
 这些几何诊断，不使用 Cornell 真值、不生成最佳后端或性能排名。
 
+`backprojection_results.csv` 保存九个二维中心的采样像素、米制深度、相机与
+世界坐标、重投影误差、segmentation/ray 命中及失败原因。
+`backprojection_summary.json` 保存九点完整性和门控计数。若目标选择或后端
+输出不完整，程序仍保留已有行，但 `backprojection_complete` 与总门控均为
+`false`。
+
 `depth.npy` 保存米制深度；PNG 深度图只是固定近远裁剪面的诊断显示。
 `metadata.json` 明确记录：
 
 ```json
 {
   "segmentation_used_as_model_input": false,
+  "depth_used_after_2d_prediction": true,
+  "segmentation_used_as_coordinate_input": false,
+  "ray_test_used_as_coordinate_input": false,
+  "ik_executed": false,
   "performance_ranking_computed": false,
   "physical_grasp_executed": false
 }
@@ -114,6 +133,7 @@ backend_comparison.png
 
 ## 当前边界
 
-本模块尚未实现深度反投影、二维到三维抓取位姿转换、逆运动学、碰撞规划、
-机械臂控制、夹爪闭合或物理抓取成功判定。进入下一阶段前，应先要求三个明确
-目标全部正确选择、三个抓取中心均位于各自 mask 内，并完成人工图像审计。
+本模块已经实现二维抓取中心的深度反投影与事后目标表面审计，但尚未把单点
+扩展为完整六自由度抓取位姿，也未实现逆运动学、碰撞规划、机械臂控制、夹爪
+闭合或物理抓取成功判定。任何九点门控通过都只能作为进入姿态与 IK 设计的
+前置证据。

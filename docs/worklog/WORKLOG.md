@@ -2,6 +2,24 @@
 
 本文是回顾已完成项目工作的入口。详细内容保留在按日期命名的周报中。
 
+## 2026-07-31 — PyBullet 深度反投影九点门控
+
+- 先保存正式设计与实施计划，固定最近像素半向上采样、PyBullet 列主序
+  view/projection 矩阵、`1 px` 重投影误差和 `1e-4 m` 深度误差门槛。
+- 新增 `backprojection.py`，实现米制深度缓冲逆换算、像素到相机/世界坐标、
+  世界点重投影、射线段构造、逐点审计及完整/不完整九点汇总。
+- 使用真实 DIRECT + TinyRenderer 场景锁定矩阵顺序、图像 Y 轴、像素中心、
+  segmentation body 解码和 `rayTest` 约定。
+- 将反投影接入固定多物体运行器，新增 `backprojection_results.csv` 与
+  `backprojection_summary.json`；不完整后端行可保存，但不能误报总门控通过。
+- 真实 CUDA 重跑生成九条结果，有限坐标、有效深度、重投影、segmentation
+  与射线目标匹配均为 `9/9`；最大像素误差 `8.04e-13 px`，最大深度往返误差
+  `3.57e-7 m`，总门控通过。
+- 明确深度只在二维预测后使用，segmentation 和射线只作事后真值审计；未实现
+  抓取姿态、IK、碰撞规划或物理执行。
+- 当前 65 项 simulation 测试、完整项目回归 `97 passed`，产物独立完整性审计
+  确认 12 个规定根文件均存在且非空。
+
 ## 2026-07-31 — 论文证据链审计
 
 - 在 `dissertation-sprint` worktree 运行完整回归，确认 `83 passed`。
