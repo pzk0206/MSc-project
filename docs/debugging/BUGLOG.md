@@ -1,4 +1,4 @@
-# Cornell 数据集解析与传统计算机视觉基线调试记录
+# 项目调试记录
 
 > 本文件保留完整调试历史。当前状态见
 > [`../agent/CURRENT_STATUS.md`](../agent/CURRENT_STATUS.md)，失败模式汇总见
@@ -802,3 +802,128 @@ VLM 辅助抓取成功率：649 / 885 = 73.33%
 ```text
 在完成传统计算机视觉 baseline 后，本项目实现了一个 VLM-assisted 抓取检测流程。该流程使用 Grounding DINO 和通用 prompt “small object” 对目标物体进行定位，然后将 VLM 输出的 bounding box 用于限制 OpenCV 轮廓提取和几何抓取框生成。在 Cornell Grasping Dataset 的 885 个样本上，VLM-assisted 方法取得了 73.33% 的抓取检测成功率，高于传统 CV baseline 的 56.95%。同时，平均角度误差也从 29.62 度下降到 14.81 度。该结果说明，开放词汇 VLM 定位能够有效改善后续几何抓取矩形检测，但剩余失败案例也表明，真正的瓶颈已经逐渐转向抓取矩形生成策略本身。
 ```
+
+## 16. CNN 多轮汇总记录缺陷
+
+日期：2026-07-24
+
+### 16.1 已确认问题
+
+1. `multi_run_summary.json` 的 `per_run.best_val_loss` 错误地写入了
+   `all_success_rate`，因此旧文件中的逐轮验证损失不可用。
+2. `run_cnn_grasp.py` 末尾存在两个相同的 `__main__` 入口，直接执行脚本会
+   重复运行完整流程。
+3. 当前保存的 `cnn_grasp_summary.json` 和
+   `cnn_grasp_predictions.csv` 来自五次实验的最后一轮，不是项目记录中的
+   73.11% 独立单次实验。
+
+### 16.2 影响范围
+
+- 五次实验的聚合成功率、IoU 和角度均值/标准差由每轮评估指标计算，不受
+  `best_val_loss` 字段错误影响。
+- 旧 `per_run.best_val_loss` 不得作为论文训练损失证据。
+- 由于原始独立单次 JSON/CSV 已被覆盖，73.11% 单次结果不进入论文主表。
+
+### 16.3 修复要求
+
+- 从每轮训练历史中保存真实最佳验证损失；
+- 将多轮汇总提取为可单元测试的纯函数；
+- 保证脚本只有一个 `__main__` 入口；
+- 不覆盖现有实验产物来验证修复。
+
+## 17. 论文模板数学符号包冲突
+
+日期：2026-07-24
+
+### 17.1 现象
+
+使用当前 Tectonic/LaTeX 发行版编译 `l4proj.tex` 时，正文处理前在
+`amssymb.sty` 报错：
+
+```text
+LaTeX Error: Command `\Bbbk' already defined.
+```
+
+### 17.2 根因与验证
+
+`l4proj.cls` 先加载 `newtxmath`，随后再次加载 `amssymb`。两个包都提供
+`\Bbbk`，新版发行版将重复定义视为错误。最小样例稳定复现：
+
+- `newtxmath + amssymb`：相同错误；
+- 仅 `amssymb`：编译成功；
+- `newtxmath + amsmath/amsfonts/amsbsy`：编译成功且常用数学符号正常。
+
+### 17.3 修复
+
+从模板的 AMS 包列表移除重复的 `amssymb`，保留 `newtxmath` 和其他 AMS
+基础包。完整论文随后成功编译为 22 页 PDF，无 LaTeX fatal error。
+
+## 18. CUDA 同 seed 训练不可重复
+
+日期：2026-07-26
+
+### 18.1 现象
+
+多头 CNN 使用相同 seed 42、相同固定划分和同一 GPU 再次运行时，第一个
+epoch 的损失只相差约 `2e-5`，但早停后的固定测试成功率从 82.35% 漂移至
+76.47%。这说明原先的 `manual_seed` 设置只控制随机数，没有消除 CUDA 算法
+非确定性。
+
+### 18.2 根因
+
+- cuDNN benchmark 和卷积算法没有显式确定性约束；
+- DataLoader 没有使用独立的 seeded generator；
+- `AdaptiveAvgPool2d` 的 CUDA 反向传播不支持 PyTorch 严格确定性模式。
+
+### 18.3 修复与验证
+
+- 固定 Python、NumPy、PyTorch 和所有 CUDA RNG；
+- 设置 `CUBLAS_WORKSPACE_CONFIG=:4096:8`；
+- 关闭 `torch.backends.cudnn.benchmark`，启用 cuDNN deterministic 和
+  `torch.use_deterministic_algorithms(True)`；
+- 为训练 DataLoader 使用按实验 seed 初始化的 `torch.Generator`；
+- 将固定 `224×224` 输入下的 `AdaptiveAvgPool2d(1)` 替换为数学等价的
+  `AvgPool2d(7)`，保持参数量和可训练权重键不变。
+
+在 GTX 1650 Ti 上用相同 seed 连续运行两次三轮小型训练，训练历史完全相同，
+所有模型权重逐位一致。修复前生成的单头重跑和中断多头批次保留为诊断证据，
+不进入最终单头/多头公平对照。
+
+## 19. PyBullet 环境、测试入口与 prompt 歧义
+
+日期：2026-07-27
+
+### 19.1 `conda run pytest` 无法导入 `src`
+
+直接运行 `conda run -n msc-grasp pytest -q` 时，pytest 可执行入口的
+`sys.path` 不包含仓库根目录，测试收集阶段报
+`ModuleNotFoundError: No module named 'src'`。同一环境使用：
+
+```bash
+conda run -n msc-grasp python -m pytest -q
+```
+
+可正确发现仓库并通过原有 32 项测试。该问题属于命令入口差异，不是源码回归；
+项目文档统一使用 `python -m pytest`。
+
+### 19.2 沙箱内外 CUDA 结果不同
+
+受限沙箱内同一 `msc-grasp` 环境返回
+`torch.cuda.is_available() == False`。在沙箱外运行相同 Conda 命令返回
+`True`，并识别 `NVIDIA GeForce GTX 1650 Ti`。因此沙箱内的 `False` 不能
+解释为驱动、CUDA 或 PyTorch 安装失败；真实 GPU 实验必须在允许访问
+`/dev/dxg` 的环境运行。
+
+### 19.3 generic prompt 选错机器人部件
+
+PyBullet 默认场景同时包含 Panda 和黄色小鸭。使用 Cornell 主实验的 generic
+prompt `small object` 时，Grounding DINO 返回 box
+`[323, 68, 450, 150]`、score `0.5985`。人工检查定位图确认该框覆盖 Panda
+末端，而非小鸭；runner 的 `status=success` 只表示管线产生合法输出，不代表
+语义目标正确。
+
+保持场景、模型、阈值和后端不变，仅将 prompt 改为
+`yellow rubber duck` 后，box 为 `[318, 208, 374, 273]`、score `0.6985`，
+人工检查确认覆盖小鸭。根因是多物体机器人场景中的 prompt 歧义，而不是颜色
+通道、相机坐标或绘图错误。后续默认配置应使 prompt 与默认 URDF 配对，同时
+保留其他物体和多物体目标的显式 prompt 选择能力。

@@ -9,7 +9,9 @@
 ├── src/
 │   ├── shared/
 │   │   ├── cornell_dataset.py
+│   │   ├── cornell_cross_validation.py
 │   │   ├── grasp_geometry.py
+│   │   ├── analyze_cornell_splits.py
 │   │   ├── check_cornell_dataset.py
 │   │   ├── export_cornell_grasp_labels.py
 │   │   ├── inspect_sample.py
@@ -18,26 +20,54 @@
 │   │   ├── run_cv_baseline.py
 │   │   ├── visualize_mask_pipeline.py
 │   │   └── visualize_mask_pipeline_batch.py
-│   └── vlm/
-│       ├── prompts.py
-│       ├── run_grounding_dino_localization.py
-│       ├── run_vlm_assisted_grasp.py
-│       ├── run_cnn_grasp.py
-│       ├── analyze_failures.py
-│       ├── INSTALL.md
-│       └── README.md
+│   ├── vlm/
+│   │   ├── prompts.py
+│   │   ├── run_grounding_dino_localization.py
+│   │   ├── run_vlm_assisted_grasp.py
+│   │   ├── cnn_grasp_models.py
+│   │   ├── run_cnn_grasp.py
+│   │   ├── run_cnn_cross_validation.py
+│   │   ├── analyze_failures.py
+│   │   ├── analyze_backend_comparison.py
+│   │   ├── INSTALL.md
+│   │   └── README.md
+│   └── simulation/
+│       └── pybullet/
+│           ├── README.md
+│           ├── scene.py
+│           ├── camera.py
+│           ├── perception.py
+│           ├── backend_comparison.py
+│           ├── target_selection.py
+│           ├── visualization.py
+│           ├── run_pilot.py
+│           └── run_multi_object_study.py
+├── tests/
+│   └── simulation/
+│       ├── test_pybullet_camera.py
+│       ├── test_pybullet_backend_comparison.py
+│       ├── test_pybullet_perception.py
+│       ├── test_pybullet_smoke.py
+│       ├── test_pybullet_target_selection.py
+│       ├── test_pybullet_visualization.py
+│       ├── test_pybullet_runner.py
+│       └── test_pybullet_multi_object_runner.py
 ├── docs/
 │   ├── agent/
 │   │   ├── CURRENT_STATUS.md
 │   │   ├── PROJECT_OVERVIEW.md
 │   │   ├── PROJECT_STRUCTURE.md
+│   │   ├── DISSERTATION_WRITING_GUIDE.md
 │   │   └── CODE_ORGANIZATION.md
 │   ├── debugging/
 │   │   ├── BUGLOG.md
 │   │   └── FAILURE_ANALYSIS.md
 │   ├── planning/
+│   │   ├── cnn_architecture_rationale.md
+│   │   ├── modern_2d_grasp_literature_matrix.md
 │   │   └── vlm_robotic_grasp_study_plan.md
 │   ├── reporting/
+│   │   ├── generate_cnn_architecture.py
 │   │   ├── generate_concise_speaking_notes_pdf.py
 │   │   ├── generate_supervisor_progress_report.py
 │   │   ├── generate_supervisor_progress_report_en.py
@@ -68,7 +98,9 @@
 | 路径 | 职责 |
 |---|---|
 | `src/shared/cornell_dataset.py` | 解析 Cornell 样本、图像和抓取标注 |
+| `src/shared/cornell_cross_validation.py` | 生成、持久化并审计确定性的 Cornell image-wise fold manifest |
 | `src/shared/grasp_geometry.py` | 抓取矩形几何转换、IoU 和角度评估 |
+| `src/shared/analyze_cornell_splits.py` | 审计 Cornell 固定目录划分、共同测试样本和代表图 |
 | `src/shared/check_cornell_dataset.py` | 检查数据集完整性 |
 | `src/shared/export_cornell_grasp_labels.py` | 导出中心参数形式的抓取标签 |
 | `src/shared/inspect_sample.py` | 检查单个 Cornell 样本 |
@@ -79,8 +111,24 @@
 | `src/vlm/prompts.py` | 保存 VLM 定位提示词配置 |
 | `src/vlm/run_grounding_dino_localization.py` | 运行 Grounding DINO 开放词汇定位 |
 | `src/vlm/run_vlm_assisted_grasp.py` | 运行 VLM 定位 + 几何抓取后端 |
-| `src/vlm/run_cnn_grasp.py` | 训练、评估并重复运行 CNN 抓取后端 |
+| `src/vlm/cnn_grasp_models.py` | 定义旧权重兼容的单头 CNN、多头 CNN 及多头损失 |
+| `src/vlm/run_cnn_grasp.py` | 训练、评估并重复运行单头或多头 CNN 抓取后端 |
+| `src/vlm/run_cnn_cross_validation.py` | 运行可恢复的单头/多头 image-wise 五折训练、聚合与成对比较 |
 | `src/vlm/analyze_failures.py` | 汇总 VLM 引导的几何实验流程失败案例 |
+| `src/vlm/analyze_backend_comparison.py` | 在固定测试子集上逐样本比较几何和 CNN 后端 |
+| `src/simulation/pybullet/scene.py` | 管理确定性 PyBullet 场景、URDF 和 client 生命周期 |
+| `src/simulation/pybullet/camera.py` | 采集 RGB、米制深度、segmentation 和相机矩阵 |
+| `src/simulation/pybullet/perception.py` | 将仿真 RGB 适配到现有 Grounding DINO、几何和 CNN 接口 |
+| `src/simulation/pybullet/backend_comparison.py` | 对三后端中心格式抓取框做有限性、目标 mask 和图像边界诊断，不生成性能排名 |
+| `src/simulation/pybullet/target_selection.py` | 使用仿真真值框事后评价多物体 prompt 目标选择，不向模型注入 segmentation |
+| `src/simulation/pybullet/visualization.py` | 绘制定位框、目标选择真值、二维抓取框和深度/分割诊断图 |
+| `src/simulation/pybullet/run_pilot.py` | 编排第一阶段仿真感知 pilot、CLI、产物和失败元数据 |
+| `src/simulation/pybullet/run_multi_object_study.py` | 一次渲染和模型加载后运行三条主 prompt 与一条 generic 诊断，并保存 CSV/JSON 和逐目标图像 |
+| `src/simulation/pybullet/README.md` | 说明仿真命令、固定协议、评价边界、官方 PyBullet 来源和输出 |
+| `docs/planning/cnn_architecture_rationale.md` | 逐项区分当前 CNN 的文献依据与工程选择 |
+| `docs/planning/modern_2d_grasp_literature_matrix.md` | 统一比较现代二维抓取方法的输入、划分、指标和可比性 |
+| `docs/agent/DISSERTATION_WRITING_GUIDE.md` | 记录论文各章节目标字数、核心内容、批判性分析要求和推荐写作顺序 |
+| `docs/reporting/generate_cnn_architecture.py` | 生成论文使用的 CNN 矢量结构图 |
 | `docs/reporting/generate_supervisor_progress_report.py` | 生成三页中文导师项目进展汇报 PDF |
 | `docs/reporting/generate_supervisor_progress_report_en.py` | 生成三页英文导师项目进展汇报 PDF |
 | `docs/reporting/generate_concise_speaking_notes_pdf.py` | 将简洁双语讲稿转换为适合 iPad 阅读的 PDF |
@@ -91,6 +139,8 @@
 | `docs/reporting/supervisor_progress_report_speaking_notes_concise_bilingual.pdf` | 适合 iPad 竖屏阅读的简洁双语讲稿 |
 | `uog_dissertation_outline/l4proj.tex` | 毕业论文主 LaTeX 文档 |
 | `uog_dissertation_outline/l4proj.bib` | 毕业论文 BibTeX 文献库 |
+| `uog_dissertation_outline/l4proj.cls` | 毕业论文模板与当前 LaTeX 兼容设置 |
+| `uog_dissertation_outline/images/cnn_architecture.pdf` | 轻量 CNN 的矢量结构图 |
 
 ## 数据流
 
@@ -104,7 +154,15 @@ data/raw/cornell/
                                              ├── 几何抓取
                                              │      └── data/processed/vlm/grasp/
                                              └── CNN 抓取
-                                                    └── data/processed/vlm/cnn_grasp/
+                                                    ├── data/processed/vlm/cnn_grasp/
+                                                    ├── data/processed/vlm/cnn_grasp_multi_head/
+                                                    └── data/processed/vlm/cnn_cross_validation/
+
+PyBullet 场景
+        └── 固定虚拟相机 ───────────────> RGB / depth / segmentation
+                                             │
+                                             └── 现有 VLM + 抓取后端
+                                                    └── data/processed/pybullet/
 ```
 
 `data/` 被 `.gitignore` 排除。源码和文档不得依赖已提交的生成结果。
@@ -138,8 +196,56 @@ conda run -n msc-grasp python src/vlm/run_cnn_grasp.py --mode all --device cuda
 # 五次重复 CNN 实验
 conda run -n msc-grasp python src/vlm/run_cnn_grasp.py --mode multi --num-runs 5 --device cuda
 
+# 训练并评估多头 CNN
+conda run -n msc-grasp python src/vlm/run_cnn_grasp.py --mode all \
+  --architecture multi_head \
+  --output-dir data/processed/vlm/cnn_grasp_multi_head --device cuda
+
+# 生成并审计共同的 image-wise 五折清单
+conda run -n msc-grasp python src/vlm/run_cnn_cross_validation.py \
+  --mode manifest
+
+# 运行一个可恢复的单头 fold
+conda run -n msc-grasp python src/vlm/run_cnn_cross_validation.py \
+  --mode run --architecture single --fold 0 --device cuda
+
+# 五折完成后聚合并比较架构
+conda run -n msc-grasp python src/vlm/run_cnn_cross_validation.py \
+  --mode aggregate --architecture single
+conda run -n msc-grasp python src/vlm/run_cnn_cross_validation.py \
+  --mode compare
+
 # 失败案例分析
 python3 src/vlm/analyze_failures.py
+
+# Cornell 数据划分审计
+conda run -n msc-grasp python src/shared/analyze_cornell_splits.py
+
+# 固定测试子集后端比较
+conda run -n msc-grasp python src/vlm/analyze_backend_comparison.py
+
+# PyBullet DIRECT 感知 pilot（小鸭目标诊断）
+conda run -n msc-grasp python src/simulation/pybullet/run_pilot.py \
+  --backend geometry --device cuda --prompt "yellow rubber duck"
+
+# 固定三物体目标选择研究
+conda run -n msc-grasp python \
+  src/simulation/pybullet/run_multi_object_study.py \
+  --device cuda \
+  --output-dir data/processed/pybullet/multi_object_study
+
+# 运行全部测试；使用 python -m pytest 保证仓库根目录可导入
+conda run -n msc-grasp python -m pytest -q
+
+# 重新生成 CNN 矢量结构图
+MPLCONFIGDIR=/tmp/msc-mplconfig conda run -n msc-grasp \
+  python docs/reporting/generate_cnn_architecture.py
+
+# 编译毕业论文（首次使用会下载标准 LaTeX 宏包缓存）
+cd uog_dissertation_outline
+XDG_CACHE_HOME=/tmp/msc-tectonic-cache conda run -n msc-grasp \
+  tectonic --keep-logs l4proj.tex
+cd ..
 ```
 
 依赖安装和 VLM 环境说明见 [`../../src/vlm/INSTALL.md`](../../src/vlm/INSTALL.md)。
@@ -165,6 +271,56 @@ data/processed/vlm/cnn_grasp/
 ├── cnn_grasp_summary.json
 ├── cnn_grasp_model.pt
 └── training_history.json
+
+data/processed/vlm/cnn_cross_validation/
+├── image_wise_folds_seed_42.csv
+├── image_wise_folds_seed_42.json
+├── single/
+│   ├── fold_0/ ... fold_4/
+│   ├── combined_predictions.csv
+│   └── cross_validation_summary.json
+├── multi_head/
+│   ├── fold_0/ ... fold_4/
+│   ├── combined_predictions.csv
+│   └── cross_validation_summary.json
+└── architecture_comparison.json
+
+data/processed/shared/split_audit/
+├── representative_samples.csv
+├── split_metrics.json
+├── same_test_subset_metrics.csv
+└── cornell_split_contact_sheet.png
+
+data/processed/vlm/backend_comparison/
+├── sample_comparison.csv
+├── comparison_summary.json
+└── backend_failure_cases.png
+
+data/processed/pybullet/pilot/
+├── rgb.png
+├── depth.npy
+├── depth_visualization.png
+├── segmentation.png
+├── localization.png
+├── prediction.png
+└── metadata.json
+
+data/processed/pybullet/multi_object_study/
+├── rgb.png
+├── depth.npy
+├── depth_visualization.png
+├── segmentation.png
+├── ground_truth_boxes.png
+├── results.csv
+├── backend_results.csv
+├── backend_comparison.json
+├── summary.json
+├── metadata.json
+└── targets/
+    ├── duck/
+    ├── cube/
+    ├── sphere/
+    └── generic/
 ```
 
 ## 文档阅读顺序
@@ -173,6 +329,7 @@ data/processed/vlm/cnn_grasp/
 2. [项目概览](PROJECT_OVERVIEW.md) — 稳定的研究背景和方法。
 3. [项目结构](PROJECT_STRUCTURE.md) — 当前目录、模块和命令。
 4. [代码组织规范](CODE_ORGANIZATION.md) — 新代码放置和模块拆分规则。
-5. [项目工作日志](../worklog/WORKLOG.md) — 按时间回顾已完成工作。
+5. [论文写作指南](DISSERTATION_WRITING_GUIDE.md) — 章节字数、内容重点和写作顺序。
+6. [项目工作日志](../worklog/WORKLOG.md) — 按时间回顾已完成工作。
 
 新增、移动或删除主要模块后必须更新本文件。

@@ -45,7 +45,9 @@
 
 \usepackage{microtype} % improve typography
 \usepackage{anyfontsize} % allow any size of font
-\usepackage{amsmath,amsfonts,amsbsy,amssymb}
+% newtxmath already provides the AMS symbol set; loading amssymb as well
+% redefines \Bbbk and fails on current LaTeX distributions.
+\usepackage{amsmath,amsfonts,amsbsy}
 \usepackage[style]{abstract} % abstract styling
 
 % set bibliography styling

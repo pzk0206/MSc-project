@@ -29,7 +29,14 @@ l4proj.tex
 7. Discussion
 8. Conclusion and Future Work
 
-## Notes
+## Current Draft
 
-This outline intentionally contains TODO placeholders rather than full dissertation content.
-Upload the whole `uog_dissertation_outline` folder to Overleaf so the class file, fonts, and images remain available.
+`l4proj.tex` now contains the complete Chinese first draft rather than the original
+TODO outline. Its quantitative claims are traced in
+`../docs/planning/experiment_result_provenance.md`; generated `.pdf`, `.log`, and
+`.blg` files are local build products.
+
+Upload the whole `uog_dissertation_outline` folder to Overleaf so the class file,
+fonts, bibliography, and images remain available. Confirm the required submission
+language, word-count convention, and bibliography format before treating this draft
+as submission-ready.
