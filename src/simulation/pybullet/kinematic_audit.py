@@ -89,6 +89,7 @@ def resolve_panda_model(
     links: dict[str, int] = {}
     movable_indices = []
     adjacent_link_pairs = set()
+    fixed_link_edges = []
     joint_count = int(
         physics.getNumJoints(robot_id, physicsClientId=client_id)
     )
@@ -108,6 +109,8 @@ def resolve_panda_model(
         links[link_name] = index
         parent_index = int(info[16])
         adjacent_link_pairs.add(tuple(sorted((parent_index, index))))
+        if int(info[2]) == physics.JOINT_FIXED:
+            fixed_link_edges.append((parent_index, index))
         if int(info[2]) != physics.JOINT_FIXED:
             movable_indices.append(index)
 
@@ -158,6 +161,26 @@ def resolve_panda_model(
         )
     ):
         raise ValueError("Panda rest poses must remain inside joint limits")
+
+    rigid_components: list[set[int]] = []
+    for parent, child in fixed_link_edges:
+        merged = {parent, child}
+        overlapping = [
+            component
+            for component in rigid_components
+            if component & merged
+        ]
+        for component in overlapping:
+            merged.update(component)
+            rigid_components.remove(component)
+        rigid_components.append(merged)
+    for component in rigid_components:
+        ordered = sorted(component)
+        adjacent_link_pairs.update(
+            (ordered[first], ordered[second])
+            for first in range(len(ordered))
+            for second in range(first + 1, len(ordered))
+        )
 
     return PandaModelInfo(
         arm_joint_indices=tuple(joints[name][0] for name in _ARM_JOINT_NAMES),
@@ -378,6 +401,7 @@ def audit_joint_path_clearance(
     pregrasp_solution: Sequence[float],
     standoff_solution: Sequence[float],
     environment_body_ids: Sequence[int],
+    allowed_environment_link_pairs: Sequence[tuple[int, int]] = (),
     samples_per_segment: int = 21,
     clearance_m: float = 0.002,
     physics: Any = p,
@@ -410,6 +434,10 @@ def audit_joint_path_clearance(
     self_collisions = 0
     minimum_clearance = clearance_m
     adjacent_pairs = set(model.adjacent_link_pairs)
+    allowed_environment_pairs = {
+        (int(robot_link), int(body_id))
+        for robot_link, body_id in allowed_environment_link_pairs
+    }
     try:
         for arm_state in sampled_states:
             for index, value in zip(model.arm_joint_indices, arm_state):
@@ -435,6 +463,8 @@ def audit_joint_path_clearance(
                     physicsClientId=client_id,
                 )
                 for contact in contacts:
+                    if (int(contact[3]), int(body_id)) in allowed_environment_pairs:
+                        continue
                     distance = float(contact[8])
                     minimum_clearance = min(minimum_clearance, distance)
                     if distance < clearance_m:

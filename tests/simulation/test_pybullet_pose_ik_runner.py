@@ -70,9 +70,20 @@ def test_real_offline_runner_writes_18_non_execution_rows(tmp_path: Path) -> Non
     ]
     assert summary["candidate_count"] == 18
     assert summary["input_grasp_count"] == 9
+    assert summary["ik_fk_passed_count"] == 18
+    assert summary["clearance_passed_count"] == 12
+    assert summary["selected_count"] == 6
+    assert summary["scientific_gate_passed"] is False
     assert metadata["simulation_setup_steps"] == 60
     assert metadata["simulation_stepped_during_candidate_audit"] is False
     assert metadata["motor_control_executed"] is False
     assert metadata["trajectory_executed"] is False
     assert metadata["gripper_closed"] is False
     assert metadata["physical_grasp_executed"] is False
+    assert metadata["ik_solver_called"] is True
+    assert metadata["joint_states_set_for_static_audit"] is True
+    assert set(metadata["input_sha256"]) == {
+        "backend_results.csv",
+        "backprojection_results.csv",
+        "metadata.json",
+    }

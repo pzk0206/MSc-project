@@ -39,6 +39,7 @@ def test_real_panda_is_resolved_by_joint_and_link_names() -> None:
         assert model.finger_joint_indices == (9, 10)
         assert model.movable_joint_indices == (*range(7), 9, 10)
         assert model.tool_link_index == 11
+        assert (6, 8) in model.adjacent_link_pairs
         assert len(model.lower_limits) == 9
         assert len(model.rest_poses) == 9
         assert model.rest_poses[-2:] == pytest.approx((0.04, 0.04))

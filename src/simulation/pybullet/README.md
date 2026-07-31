@@ -7,7 +7,7 @@
 [Bullet Physics / PyBullet 官方项目](https://github.com/bulletphysics/bullet3)
 及其随包资源。这里没有复制或改编外部抓取执行代码。
 
-## 两种运行方式
+## 三种运行方式
 
 单物体感知诊断：
 
@@ -24,6 +24,20 @@ conda run -n msc-grasp python \
   --device cuda \
   --output-dir data/processed/pybullet/multi_object_study
 ```
+
+在保存的九点门控结果上运行独立静态姿态/IK 审计：
+
+```bash
+conda run -n msc-grasp python \
+  src/simulation/pybullet/run_pose_ik_study.py \
+  --input-dir data/processed/pybullet/multi_object_study \
+  --output-dir data/processed/pybullet/multi_object_study
+```
+
+该命令为每条二维抓取生成 `0°/180°` 两个世界 `-Z` 俯视候选，检查 Panda
+七关节 IK、`5 mm/5°` FK 误差和 `2 mm` 碰撞余量。两段关节插值各采样
+21 个状态，共 41 个唯一状态；状态只通过 DIRECT 中的 `resetJointState`
+静态检查，不调用电机控制、不执行轨迹、不闭合夹爪。
 
 该命令还会在三个正确目标上并列运行：
 
@@ -85,6 +99,9 @@ data/processed/pybullet/multi_object_study/
 ├── backend_comparison.json
 ├── backprojection_results.csv
 ├── backprojection_summary.json
+├── pose_ik_candidates.csv
+├── pose_ik_summary.json
+├── pose_ik_metadata.json
 ├── summary.json
 ├── metadata.json
 └── targets/
@@ -116,6 +133,15 @@ backend_comparison.png
 输出不完整，程序仍保留已有行，但 `backprojection_complete` 与总门控均为
 `false`。
 
+`pose_ik_candidates.csv` 保存 18 个对称候选的世界姿态、七关节解、FK 误差、
+41 状态碰撞统计、选择标志和失败原因。`pose_ik_summary.json` 保存分阶段计数，
+`pose_ik_metadata.json` 保存输入 SHA-256、固定阈值和非执行边界。固定底座与
+桌面的安装接触以及固定关节刚体内部接触不计为候选碰撞；目标物体不豁免。
+
+2026-07-31 的真实 DIRECT 审计中，18/18 候选通过 IK/FK，12/18 通过碰撞
+余量，6/9 个输入选出候选。三个 duck 输入均因环境余量失败，因此总科学
+门控为 `false`；该结果不作物理抓取成功率解释。
+
 `depth.npy` 保存米制深度；PNG 深度图只是固定近远裁剪面的诊断显示。
 `metadata.json` 明确记录：
 
@@ -133,7 +159,6 @@ backend_comparison.png
 
 ## 当前边界
 
-本模块已经实现二维抓取中心的深度反投影与事后目标表面审计，但尚未把单点
-扩展为完整六自由度抓取位姿，也未实现逆运动学、碰撞规划、机械臂控制、夹爪
-闭合或物理抓取成功判定。任何九点门控通过都只能作为进入姿态与 IK 设计的
-前置证据。
+本模块已经实现二维抓取中心反投影、确定性六自由度悬停姿态、离线 IK/FK 和
+离散碰撞余量审计。它尚未实现连续轨迹规划、机械臂控制、夹爪闭合、接触验证
+或物理抓取成功判定；静态候选通过不能称为仿真抓取成功。

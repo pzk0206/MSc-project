@@ -39,6 +39,9 @@
 │           ├── perception.py
 │           ├── backend_comparison.py
 │           ├── backprojection.py
+│           ├── pose_generation.py
+│           ├── kinematic_audit.py
+│           ├── run_pose_ik_study.py
 │           ├── target_selection.py
 │           ├── visualization.py
 │           ├── run_pilot.py
@@ -48,6 +51,9 @@
 │       ├── test_pybullet_camera.py
 │       ├── test_pybullet_backend_comparison.py
 │       ├── test_pybullet_backprojection.py
+│       ├── test_pybullet_pose_generation.py
+│       ├── test_pybullet_kinematic_audit.py
+│       ├── test_pybullet_pose_ik_runner.py
 │       ├── test_pybullet_perception.py
 │       ├── test_pybullet_smoke.py
 │       ├── test_pybullet_target_selection.py
@@ -123,6 +129,9 @@
 | `src/simulation/pybullet/perception.py` | 将仿真 RGB 适配到现有 Grounding DINO、几何和 CNN 接口 |
 | `src/simulation/pybullet/backend_comparison.py` | 对三后端中心格式抓取框做有限性、目标 mask 和图像边界诊断，不生成性能排名 |
 | `src/simulation/pybullet/backprojection.py` | 用米制深度和 PyBullet 相机矩阵将二维抓取中心恢复为相机/世界坐标，并以重投影、segmentation 和射线命中执行九点事后门控 |
+| `src/simulation/pybullet/pose_generation.py` | 将九点结果和二维方向转换为两个世界 -Z 俯视悬停姿态候选 |
+| `src/simulation/pybullet/kinematic_audit.py` | 按名称解析 Panda，并执行可恢复的离线 IK/FK、关节限位和静态碰撞余量审计 |
+| `src/simulation/pybullet/run_pose_ik_study.py` | 独立读取九点产物，审计 18 个候选并保存 CSV/JSON；不执行电机、轨迹或夹爪 |
 | `src/simulation/pybullet/target_selection.py` | 使用仿真真值框事后评价多物体 prompt 目标选择，不向模型注入 segmentation |
 | `src/simulation/pybullet/visualization.py` | 绘制定位框、目标选择真值、二维抓取框和深度/分割诊断图 |
 | `src/simulation/pybullet/run_pilot.py` | 编排第一阶段仿真感知 pilot、CLI、产物和失败元数据 |
@@ -320,6 +329,11 @@ data/processed/pybullet/multi_object_study/
 ├── results.csv
 ├── backend_results.csv
 ├── backend_comparison.json
+├── backprojection_results.csv
+├── backprojection_summary.json
+├── pose_ik_candidates.csv
+├── pose_ik_summary.json
+├── pose_ik_metadata.json
 ├── summary.json
 ├── metadata.json
 └── targets/

@@ -6,11 +6,15 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import argparse
 import csv
+import hashlib
+import importlib.metadata
 import json
 import math
 from pathlib import Path
 import sys
 from typing import Any, Mapping
+
+import pybullet as p
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -177,6 +181,7 @@ def _audit_candidate(
     client_id: int,
     model: PandaModelInfo,
     environment_body_ids: tuple[int, ...],
+    allowed_environment_link_pairs: tuple[tuple[int, int], ...],
 ) -> CandidateAudit:
     pregrasp = audit_pose_ik(
         robot_id, client_id, model, candidate.pregrasp_pose
@@ -195,15 +200,21 @@ def _audit_candidate(
             for index in model.arm_joint_indices
         )
         arm_rest = tuple(model.rest_poses[offset] for offset in arm_offsets)
-        collision = audit_joint_path_clearance(
-            robot_id=robot_id,
-            client_id=client_id,
-            model=model,
-            start_solution=arm_rest,
-            pregrasp_solution=pregrasp.solution,
-            standoff_solution=standoff.solution,
-            environment_body_ids=environment_body_ids,
-        )
+        try:
+            collision = audit_joint_path_clearance(
+                robot_id=robot_id,
+                client_id=client_id,
+                model=model,
+                start_solution=arm_rest,
+                pregrasp_solution=pregrasp.solution,
+                standoff_solution=standoff.solution,
+                environment_body_ids=environment_body_ids,
+                allowed_environment_link_pairs=allowed_environment_link_pairs,
+            )
+        except Exception as exc:  # PyBullet exposes backend-specific errors.
+            collision = _failed_collision(
+                f"collision_audit_error:{type(exc).__name__}:{exc}"
+            )
         cost = _joint_cost(model, pregrasp.solution, standoff.solution)
     else:
         collision = _failed_collision("ik_solution_unavailable")
@@ -329,6 +340,9 @@ def run_pose_ik_study(config: PoseIKStudyConfig) -> dict[str, object]:
                     client_id=scene.client_id,
                     model=model,
                     environment_body_ids=environment,
+                    allowed_environment_link_pairs=(
+                        (-1, scene.bodies.table),
+                    ),
                 )
                 for candidate in candidates
             )
@@ -363,10 +377,27 @@ def run_pose_ik_study(config: PoseIKStudyConfig) -> dict[str, object]:
         "inverse_kinematics_executed": True,
         "forward_kinematics_verified": True,
         "static_joint_resets_used": True,
+        "ik_solver_called": True,
+        "joint_states_set_for_static_audit": True,
+        "motor_control_called": False,
         "motor_control_executed": False,
         "trajectory_executed": False,
         "gripper_closed": False,
         "physical_grasp_executed": False,
+        "input_sha256": {
+            name: hashlib.sha256(
+                (Path(config.input_dir) / name).read_bytes()
+            ).hexdigest()
+            for name in (
+                "backend_results.csv",
+                "backprojection_results.csv",
+                "metadata.json",
+            )
+        },
+        "pybullet": {
+            "package_version": importlib.metadata.version("pybullet"),
+            "api_version": p.getAPIVersion(),
+        },
         "thresholds": {
             "position_error_m": 0.005,
             "orientation_error_degrees": 5.0,

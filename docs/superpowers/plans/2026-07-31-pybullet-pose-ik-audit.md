@@ -36,25 +36,25 @@
 - Produces: PoseCandidate(target, backend, symmetry_degrees, finger_axis_world, closing_axis_world, approach_axis_world, surface_standoff_pose, pregrasp_pose)
 - Produces: generate_top_down_pose_candidates(...) -> tuple[PoseCandidate, PoseCandidate]
 
-- [ ] **Step 1: Write continuous-coordinate RED tests**
+- [x] **Step 1: Write continuous-coordinate RED tests**
 
 Assert integer (0,0) matches backproject_pixel for a 1x1 camera; assert fractional coordinates round-trip; reject non-finite and outside-image values.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
     conda run -n msc-grasp python -m pytest tests/simulation/test_pybullet_backprojection.py -q
 
 Expected: import failure for backproject_image_coordinate.
 
-- [ ] **Step 3: Implement shared continuous backprojection**
+- [x] **Step 3: Implement shared continuous backprojection**
 
 Move NDC calculation into backproject_image_coordinate. Make backproject_pixel validate integer indices then delegate. Preserve the pixel-centre convention pixel + 0.5.
 
-- [ ] **Step 4: Write pose-generation RED tests**
+- [x] **Step 4: Write pose-generation RED tests**
 
 With downward and oblique cameras assert two candidates, world -Z approach, orthonormal rotation, standoff/pregrasp offsets, opposite symmetry axes, and fractional reprojection. Add 90-degree, border, NaN angle, zero tangent, and invalid-offset cases.
 
-- [ ] **Step 5: Implement the exact interface**
+- [x] **Step 5: Implement the exact interface**
 
     def generate_top_down_pose_candidates(
         *, target: str, backend: str, column: int, row: int,
@@ -67,7 +67,7 @@ With downward and oblique cameras assert two candidates, world -Z approach, orth
 
 Clip two continuous auxiliary points to image bounds, backproject at the centre depth, project the difference to XY, reject norm below 1e-8, and construct rotation columns [x_g, cross(z_g,x_g), z_g]. Require orthogonality and determinant within 1e-9.
 
-- [ ] **Step 6: Run GREEN and commit**
+- [x] **Step 6: Run GREEN and commit**
 
     conda run -n msc-grasp python -m pytest tests/simulation/test_pybullet_backprojection.py tests/simulation/test_pybullet_pose_generation.py -q
     git diff --check
@@ -89,27 +89,27 @@ Clip two continuous auxiliary points to image bounds, backproject at the centre 
 - Produces: resolve_panda_model(robot_id, client_id, physics=p)
 - Produces: audit_pose_ik(robot_id, client_id, model, pose, physics=p)
 
-- [ ] **Step 1: Write resolver RED tests**
+- [x] **Step 1: Write resolver RED tests**
 
 Use a fake physics object with shuffled indices. Verify names determine seven arm joints, two fingers, nine movable order and tool link. Mutate a name/type/limit and require exact ValueError messages.
 
-- [ ] **Step 2: Implement resolver**
+- [x] **Step 2: Implement resolver**
 
 Decode getJointInfo names, validate revolute arms and prismatic fingers, midpoint arm rests, 0.04 m finger rests, and finite ordered limits.
 
-- [ ] **Step 3: Write IK/FK RED tests**
+- [x] **Step 3: Write IK/FK RED tests**
 
 Cover nine-value IK return mapping, seven-value null-space arrays, arm limit violation, non-finite output, position error over 5 mm, orientation error over 5 degrees, and restoration after getLinkState raises. Fake motor and step methods must raise if called.
 
-- [ ] **Step 4: Implement state-safe IK/FK**
+- [x] **Step 4: Implement state-safe IK/FK**
 
 Save nine movable states; reset the seven arm joints to midpoint rests and fingers to 0.04 because PyBullet uses current state as its numerical seed; call calculateInverseKinematics with seven arm limit/range/rest arrays, maxNumIterations=200 and residualThreshold=1e-5; map the nine-value return by movable order, reset seven arm and two open fingers; read FK; use 2*acos(abs(dot(q1,q2))); restore in finally.
 
-- [ ] **Step 5: Add real DIRECT convention test**
+- [x] **Step 5: Add real DIRECT convention test**
 
 Load the Panda, resolve names, and audit a reachable top-down pose at (0.45,0,0.85). Assert seven finite arm values, limit/FK pass, and original states restored.
 
-- [ ] **Step 6: Run and commit**
+- [x] **Step 6: Run and commit**
 
     conda run -n msc-grasp python -m pytest tests/simulation/test_pybullet_kinematic_audit.py -q
     git diff --check
@@ -132,27 +132,27 @@ Load the Panda, resolve names, and audit a reachable top-down pose at (0.45,0,0.
 - Produces: audit_joint_path_clearance(..., samples_per_segment=21, clearance_m=0.002)
 - Produces: CandidateAudit and select_candidate_pair(audits)
 
-- [ ] **Step 1: Write scene-flag RED test**
+- [x] **Step 1: Write scene-flag RED test**
 
 Patch loadURDF. Assert default Panda flags remain zero and opt-in passes p.URDF_USE_SELF_COLLISION.
 
-- [ ] **Step 2: Implement opt-in self-collision loading**
+- [x] **Step 2: Implement opt-in self-collision loading**
 
 Add the frozen config field and pass explicit flags only to the Panda load.
 
-- [ ] **Step 3: Write collision RED tests**
+- [x] **Step 3: Write collision RED tests**
 
 Assert 41 unique states for two 21-state segments, open fingers, one collision detection per state, environment failures, adjacent self-pair filtering, non-adjacent self failure, forbidden step/motor calls, and state restoration after exceptions.
 
-- [ ] **Step 4: Implement collision audit**
+- [x] **Step 4: Implement collision audit**
 
 Use np.linspace and de-duplicate pregrasp. Query robot against plane/table/all objects with distance 0.002. Query robot against itself, ignoring identical and direct parent-child link pairs derived from joint metadata. Absence within the query radius means clearance is at least 2 mm.
 
-- [ ] **Step 5: Implement deterministic selection**
+- [x] **Step 5: Implement deterministic selection**
 
 Require symmetry order (0,180). Select fully passing candidate with minimum sum of squared arm displacement divided by squared joint range; tie-break on 0. Preserve both rows; select neither if both fail.
 
-- [ ] **Step 6: Run and commit**
+- [x] **Step 6: Run and commit**
 
     conda run -n msc-grasp python -m pytest tests/simulation/test_pybullet_kinematic_audit.py tests/simulation/test_pybullet_smoke.py -q
     git diff --check
@@ -172,23 +172,23 @@ Require symmetry order (0,180). Select fully passing candidate with minimum sum 
 - Produces: pose_ik_candidates.csv, pose_ik_summary.json and pose_ik_metadata.json
 - CLI: --input-dir and --output-dir, both default to the fixed multi-object directory
 
-- [ ] **Step 1: Write input-contract RED tests**
+- [x] **Step 1: Write input-contract RED tests**
 
 Reject missing/reordered rows, false prior gate, target/backend mismatch, centre mismatch over 1e-9, missing angle, metadata dimensions other than 640x480, seed other than 42, and wrong object order. Assert no IK dependency is called on failure.
 
-- [ ] **Step 2: Write output RED tests**
+- [x] **Step 2: Write output RED tests**
 
 Inject fake scene/pose/IK/collision boundaries. Assert 18 rows in target/backend/symmetry order, nine selections on complete pass, exact counts and metadata flags. An all-fail fixture still writes 18 rows with scientific gate false.
 
-- [ ] **Step 3: Implement runner and CLI**
+- [x] **Step 3: Implement runner and CLI**
 
 Connect fixed scene with self collision, perform the same 60 setup steps before candidate audit, resolve Panda once, and audit 18 candidates. Do not call scene.step after candidate generation. Save failure metadata and always close the scene.
 
-- [ ] **Step 4: Enforce non-execution metadata**
+- [x] **Step 4: Enforce non-execution metadata**
 
 Record simulation_setup_steps=60 separately from simulation_stepped_during_candidate_audit=false. Record solver/static-reset true and motor/trajectory/gripper/physical flags false.
 
-- [ ] **Step 5: Run and commit**
+- [x] **Step 5: Run and commit**
 
     conda run -n msc-grasp python -m pytest tests/simulation/test_pybullet_pose_ik_runner.py -q
     conda run -n msc-grasp python src/simulation/pybullet/run_pose_ik_study.py --help
