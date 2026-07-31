@@ -60,12 +60,15 @@ pose 使用同一中点；range 为上限减下限。所有输入、输出和限
 
 每个方向候选依次求解 pregrasp 与 surface-standoff：
 
-1. 调用 PyBullet `calculateInverseKinematics`，提供工具 link、目标位置、目标
-   四元数、全部九个可动关节（七个臂关节与两个手指）的上下限、range 和 rest
-   pose，以及 `maxNumIterations=200`、`residualThreshold=1e-5`；手指 rest
-   pose 固定为完全张开的 `0.04 m`；
+1. 保存原状态后先把七臂关节临时设为中立中点、两个手指设为 `0.04 m`，因为
+   PyBullet 求解器使用当前状态作为数值初值；随后调用
+   `calculateInverseKinematics`，提供工具 link、目标位置、目标
+   四元数，以及末端运动链中七个臂关节的上下限、range 和 rest pose；虽然
+   当前 URDF 的返回向量含九个可动关节值，null-space 限位数组必须按七关节
+   运动链提供；另设 `maxNumIterations=200`、`residualThreshold=1e-5`；
 2. PyBullet 对当前 URDF 返回九个可动关节值；只用其中按名称映射的七个臂关节
-   作为姿态解，手指始终由静态审计显式设为 `0.04 m`；
+   作为姿态解，两个手指返回值不参与 IK 门控，静态审计始终将手指显式设为
+   完全张开的 `0.04 m`；
 3. 检查结果有限且位于限位内（容差 `1e-6 rad`）；
 4. 在保存原始关节状态后，以 `resetJointState` 临时设置候选并用 FK 回读工具
    位姿；

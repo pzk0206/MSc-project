@@ -14,7 +14,7 @@
 - Surface standoff is 0.02 m; pregrasp adds 0.10 m; image tangent offset is 5 px.
 - Generate exactly two candidates per row: 0 and 180 degree symmetry only.
 - Resolve Panda joints and panda_grasptarget by name, never hard-coded index.
-- IK limits include all nine movable joints; only seven named arm values form an arm solution.
+- IK null-space limits include the seven tool-chain arm joints; PyBullet's nine-value return is mapped by movable-joint order and finger values are ignored in favour of explicit 0.04 m opening.
 - FK thresholds: 0.005 m and 5 degrees; joint-limit tolerance: 1e-6 rad.
 - Collision clearance: 0.002 m; sample 21 states per segment including endpoints.
 - No setJointMotorControl calls, no stepSimulation during candidate audit, no gripper closure.
@@ -99,11 +99,11 @@ Decode getJointInfo names, validate revolute arms and prismatic fingers, midpoin
 
 - [ ] **Step 3: Write IK/FK RED tests**
 
-Cover nine-value IK mapping, limit violation, non-finite output, position error over 5 mm, orientation error over 5 degrees, and restoration after getLinkState raises. Fake motor and step methods must raise if called.
+Cover nine-value IK return mapping, seven-value null-space arrays, arm limit violation, non-finite output, position error over 5 mm, orientation error over 5 degrees, and restoration after getLinkState raises. Fake motor and step methods must raise if called.
 
 - [ ] **Step 4: Implement state-safe IK/FK**
 
-Save nine movable states; call calculateInverseKinematics with nine limit/range/rest arrays, maxNumIterations=200 and residualThreshold=1e-5; reset seven arm and two open fingers; read FK; use 2*acos(abs(dot(q1,q2))); restore in finally.
+Save nine movable states; reset the seven arm joints to midpoint rests and fingers to 0.04 because PyBullet uses current state as its numerical seed; call calculateInverseKinematics with seven arm limit/range/rest arrays, maxNumIterations=200 and residualThreshold=1e-5; map the nine-value return by movable order, reset seven arm and two open fingers; read FK; use 2*acos(abs(dot(q1,q2))); restore in finally.
 
 - [ ] **Step 5: Add real DIRECT convention test**
 
@@ -234,4 +234,3 @@ Update status/worklog with actual pass/failure counts and reasons. Do not add un
     git diff --check
     git add src/simulation/pybullet/README.md docs/agent/PROJECT_STRUCTURE.md docs/agent/CURRENT_STATUS.md docs/worklog/WORKLOG.md
     git commit -m "docs: record offline Panda pose audit"
-
