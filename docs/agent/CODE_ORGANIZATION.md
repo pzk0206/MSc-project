@@ -10,7 +10,8 @@
 - `src/baseline_cv/`：传统 OpenCV 基线实现及仅用于该基线的诊断工具。
 - `src/vlm/`：Grounding DINO 定位、VLM 引导的几何抓取、CNN 抓取和仅用于 VLM 的分析。
 - `src/simulation/pybullet/`：PyBullet 场景、虚拟相机、现有感知后端适配、
-  仿真结果绘制和 pilot 命令行编排；不得在第一阶段混入机器人抓取执行。
+  深度反投影、纯姿态生成、离线 IK/FK、静态碰撞审计和命令行编排；任何
+  电机、轨迹、夹爪或物理执行必须作为新的独立阶段设计，不能混入静态审计。
 - `uog_dissertation_outline/`：毕业论文 LaTeX 源文件和论文素材。
 - `data/processed/<pipeline>/`：生成的模型、预测、汇总和图表；生成文件不得放在 `src/` 中。
 
@@ -26,6 +27,8 @@
 8. 重构时保持现有命令和输出格式兼容；如必须破坏兼容性，应明确记录迁移方法。
 9. 仿真模块复用 `src/vlm/` 的定位和抓取实现；不得复制模型或以 segmentation
    真值替代预测。若逻辑未来被两条以上流程复用，再评估移入 `src/shared/`。
+10. 仿真静态审计可以在独立 DIRECT client 中临时调用 `resetJointState`，但
+    必须恢复状态，并通过元数据区分数值求解、静态设置与真实运动执行。
 
 ## 何时拆分文件
 

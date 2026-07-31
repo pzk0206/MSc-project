@@ -177,7 +177,9 @@ PyBullet 场景
                                                     │
                                                     └── 二维中心 + depth + 相机矩阵
                                                            └── 世界坐标与九点审计
-                                                                  └── data/processed/pybullet/
+                                                                  └── 两个俯视悬停候选
+                                                                         └── Panda IK/FK + 41 状态碰撞审计
+                                                                                └── data/processed/pybullet/
 ```
 
 `data/` 被 `.gitignore` 排除。源码和文档不得依赖已提交的生成结果。
@@ -247,6 +249,12 @@ conda run -n msc-grasp python src/simulation/pybullet/run_pilot.py \
 conda run -n msc-grasp python \
   src/simulation/pybullet/run_multi_object_study.py \
   --device cuda \
+  --output-dir data/processed/pybullet/multi_object_study
+
+# 对已保存九点结果运行静态姿态、IK/FK 和碰撞余量审计
+conda run -n msc-grasp python \
+  src/simulation/pybullet/run_pose_ik_study.py \
+  --input-dir data/processed/pybullet/multi_object_study \
   --output-dir data/processed/pybullet/multi_object_study
 
 # 运行全部测试；使用 python -m pytest 保证仓库根目录可导入
