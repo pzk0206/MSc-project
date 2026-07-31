@@ -182,7 +182,7 @@ $[c_x,c_y,w,h,\sin(2\theta),\cos(2\theta)]$。双角度表示遵循 GG-CNN 的�
 \section{PyBullet 补充坐标验证方法}
 补充验证采用一个固定 PyBullet 场景，其中包含黄色鸭、红色方块、绿色球体和作为干扰项的 Franka Panda。三条明确目标提示和 geometry、single、multi-head 三个后端复用同一幅 $640\times480$ RGB 图像、米制深度、segmentation、view matrix 与 projection matrix。只有正确选择目标后保存的九个二维抓取中心进入坐标验证；该过程发生在二维预测之后，不改变 Grounding DINO 或三个后端的输入。
 
-对每个中心 $(c_x,c_y)$，系统采用最近像素并以 half-up 规则取整得到列与行，然后读取该像素的米制深度。米制深度先按 PyBullet/OpenGL 透视深度关系还原为 depth-buffer 值，再使用列主序 projection matrix 的逆矩阵恢复相机齐次坐标，并使用 projection--view 组合矩阵的逆矩阵恢复世界坐标。所得世界点随后通过原 view/projection matrix 重投影到图像。相机矩阵和深度缓冲约定遵循 Bullet Physics 的 PyBullet Quickstart Guide\footnote{\url{https://github.com/bulletphysics/bullet3/blob/master/docs/pybullet_quickstartguide.pdf}}；最近像素选择、九点协议和联合门槛为本项目的工程设计。
+对每个中心 $(c_x,c_y)$，系统采用最近像素并以 half-up 规则取整得到列与行，然后读取该像素的米制深度。米制深度先按 PyBullet/OpenGL 透视深度关系还原为 depth-buffer 值，再使用列主序 projection matrix 的逆矩阵恢复相机齐次坐标，并使用 projection--view 组合矩阵的逆矩阵恢复世界坐标。所得世界点随后通过原 view/projection matrix 重投影到图像。相机矩阵和深度缓冲约定遵循 \href{https://github.com/bulletphysics/bullet3/blob/master/docs/pybullet_quickstartguide.pdf}{Bullet Physics 官方 PyBullet Quickstart Guide}；最近像素选择、九点协议和联合门槛为本项目的工程设计。
 
 逐点门控要求深度严格位于 $0.05$\,m 与 $3.0$\,m 裁剪面之间、全部相机与世界坐标有限、像素重投影误差不超过 $1$\,px、深度往返误差不超过 $10^{-4}$\,m、采样像素的 segmentation body 与指定目标一致，且从相机光心穿过反投影点并延长 $0.05$\,m 的 \texttt{rayTest} 首次命中同一目标。Segmentation 与射线结果只在坐标产生后作真值审计，不修正坐标，也不参与二维预测。该阶段不生成完整夹爪姿态，不调用 IK，不移动关节，也不闭合夹爪。
 
@@ -485,7 +485,15 @@ data/processed/pybullet/multi_object_study/
 data/processed/pybullet/multi_object_study/metadata.json
 \end{lstlisting}
 
-PyBullet metadata 保留以下证据边界：\texttt{depth\_used\_after\_2d\_prediction: true}，\texttt{segmentation\_used\_as\_coordinate\_input: false}，\texttt{ray\_test\_used\_as\_coordinate\_input: false}，\texttt{ik\_executed: false}，以及 \texttt{physical\_grasp\_executed: false}。这些字段用于防止把事后真值审计写成坐标输入，或把坐标门控写成机械臂执行。
+PyBullet metadata 保留以下证据边界：
+\begin{lstlisting}
+depth_used_after_2d_prediction: true
+segmentation_used_as_coordinate_input: false
+ray_test_used_as_coordinate_input: false
+ik_executed: false
+physical_grasp_executed: false
+\end{lstlisting}
+这些字段用于防止把事后真值审计写成坐标输入，或把坐标门控写成机械臂执行。
 
 旧的单头 CNN 单次运行 73.11\% 无法由上述产物复现，因此不进入论文主要证据；它与当前可审计的多头 image-wise 五折 73.11\% 不是同一结果。
 

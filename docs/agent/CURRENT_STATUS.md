@@ -153,8 +153,10 @@ Object-wise 需要图像到物体实例的权威映射；当前数据和已检�
 - 毕业论文 LaTeX 框架位于 `uog_dissertation_outline/`。
 - `uog_dissertation_outline/l4proj.tex` 已覆盖为完整中文初稿；英文版本可从
   Git 提交 `a4d62d6` 恢复。
-- 中文 PDF 已用 Tectonic 编译为 27 页，并回读摘要、目录、七个主要章节、
+- 中文 PDF 已用 Tectonic 编译为 29 页，并回读摘要、目录、七个主要章节、
   表/图标签和参考文献；12 个 citation key 与 BibTeX 条目全部匹配。
+- 论文已在不新增第四个研究问题的前提下补入 PyBullet 坐标验证方法、九点
+  结果表、分层讨论、结论边界及复现附录；表格页与方法页视觉检查无越界。
 - 旧模板的 `agsm.bst` 在当前 BibTeX 引擎中产生 entry-mutation errors，
   因此初稿改用 natbib 兼容的 `plainnat` 作者—年份参考文献样式；BibTeX
   条目内容和引用 key 未改变。
