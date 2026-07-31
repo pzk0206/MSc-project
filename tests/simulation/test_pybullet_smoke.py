@@ -134,6 +134,13 @@ def test_scene_rejects_duplicate_object_names_and_closes() -> None:
     assert not scene.is_connected
 
 
+def test_scene_can_opt_in_to_robot_self_collision() -> None:
+    with PyBulletScene(
+        SceneConfig(gui=False, robot_self_collision=True)
+    ) as scene:
+        assert scene.bodies.robot >= 0
+
+
 def test_fixed_study_robot_does_not_penetrate_table_or_eject_targets() -> None:
     scene = PyBulletScene(
         fixed_scene_config(MultiObjectStudyConfig(device="cpu"))

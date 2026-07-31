@@ -37,6 +37,7 @@ class SceneConfig:
     time_step: float = 1.0 / 240.0
     gravity: tuple[float, float, float] = (0.0, 0.0, -9.81)
     robot_position: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    robot_self_collision: bool = False
     table_position: tuple[float, float, float] = (0.5, 0.0, 0.0)
     object_urdf: str = "duck_vhacd.urdf"
     object_position: tuple[float, float, float] = (0.55, 0.0, 0.66)
@@ -222,6 +223,11 @@ class PyBulletScene:
                 "franka_panda/panda.urdf",
                 basePosition=self.config.robot_position,
                 useFixedBase=True,
+                flags=(
+                    p.URDF_USE_SELF_COLLISION
+                    if self.config.robot_self_collision
+                    else 0
+                ),
                 physicsClientId=self.client_id,
             )
             target_object = self._load_object(object_configs[0])

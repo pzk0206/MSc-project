@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import math
-from typing import Any
+from typing import Any, Sequence
 
 import numpy as np
 import pybullet as p
 
-from src.simulation.pybullet.pose_generation import ToolPose
+from src.simulation.pybullet.pose_generation import PoseCandidate, ToolPose
 
 
 POSITION_ERROR_THRESHOLD_M = 0.005
@@ -32,6 +32,7 @@ class PandaModelInfo:
     upper_limits: tuple[float, ...]
     joint_ranges: tuple[float, ...]
     rest_poses: tuple[float, ...]
+    adjacent_link_pairs: tuple[tuple[int, int], ...]
 
 
 @dataclass(frozen=True)
@@ -44,6 +45,32 @@ class IKPoseAudit:
     orientation_error_degrees: float | None
     fk_passed: bool
     gate_passed: bool
+    failure_reason: str
+
+
+@dataclass(frozen=True)
+class CollisionAudit:
+    """Clearance result across a statically sampled arm path."""
+
+    clearance_passed: bool
+    checked_state_count: int
+    minimum_clearance_m: float
+    environment_collision_count: int
+    self_collision_count: int
+    failure_reason: str
+
+
+@dataclass(frozen=True)
+class CandidateAudit:
+    """Combined pose, IK/FK, collision, and selection result."""
+
+    candidate: PoseCandidate
+    pregrasp_ik: IKPoseAudit
+    standoff_ik: IKPoseAudit
+    collision: CollisionAudit
+    total_normalized_joint_cost: float
+    gate_passed: bool
+    selected: bool
     failure_reason: str
 
 
@@ -61,6 +88,7 @@ def resolve_panda_model(
     joints: dict[str, tuple[int, tuple[Any, ...]]] = {}
     links: dict[str, int] = {}
     movable_indices = []
+    adjacent_link_pairs = set()
     joint_count = int(
         physics.getNumJoints(robot_id, physicsClientId=client_id)
     )
@@ -78,6 +106,8 @@ def resolve_panda_model(
             raise ValueError(f"duplicate Panda link name: {link_name}")
         joints[name] = (index, info)
         links[link_name] = index
+        parent_index = int(info[16])
+        adjacent_link_pairs.add(tuple(sorted((parent_index, index))))
         if int(info[2]) != physics.JOINT_FIXED:
             movable_indices.append(index)
 
@@ -140,6 +170,7 @@ def resolve_panda_model(
         upper_limits=tuple(upper_limits),
         joint_ranges=ranges,
         rest_poses=tuple(rest_poses),
+        adjacent_link_pairs=tuple(sorted(adjacent_link_pairs)),
     )
 
 
@@ -323,3 +354,159 @@ def audit_pose_ik(
                 value,
                 physicsClientId=client_id,
             )
+
+
+def _validated_arm_solution(
+    values: Sequence[float],
+    model: PandaModelInfo,
+    name: str,
+) -> np.ndarray:
+    solution = np.asarray(values, dtype=np.float64)
+    if solution.shape != (len(model.arm_joint_indices),):
+        raise ValueError(f"{name} must contain seven arm values")
+    if not np.all(np.isfinite(solution)):
+        raise ValueError(f"{name} must contain finite arm values")
+    return solution
+
+
+def audit_joint_path_clearance(
+    *,
+    robot_id: int,
+    client_id: int,
+    model: PandaModelInfo,
+    start_solution: Sequence[float],
+    pregrasp_solution: Sequence[float],
+    standoff_solution: Sequence[float],
+    environment_body_ids: Sequence[int],
+    samples_per_segment: int = 21,
+    clearance_m: float = 0.002,
+    physics: Any = p,
+) -> CollisionAudit:
+    """Statically sample two joint segments and check 2 mm clearance."""
+
+    if samples_per_segment < 2:
+        raise ValueError("samples_per_segment must be at least two")
+    if not math.isfinite(clearance_m) or clearance_m <= 0.0:
+        raise ValueError("clearance_m must be finite and positive")
+    start = _validated_arm_solution(start_solution, model, "start_solution")
+    pregrasp = _validated_arm_solution(
+        pregrasp_solution, model, "pregrasp_solution"
+    )
+    standoff = _validated_arm_solution(
+        standoff_solution, model, "standoff_solution"
+    )
+    first_segment = np.linspace(start, pregrasp, samples_per_segment)
+    second_segment = np.linspace(pregrasp, standoff, samples_per_segment)[1:]
+    sampled_states = np.concatenate((first_segment, second_segment), axis=0)
+    original_states = tuple(
+        float(
+            physics.getJointState(
+                robot_id, index, physicsClientId=client_id
+            )[0]
+        )
+        for index in model.movable_joint_indices
+    )
+    environment_collisions = 0
+    self_collisions = 0
+    minimum_clearance = clearance_m
+    adjacent_pairs = set(model.adjacent_link_pairs)
+    try:
+        for arm_state in sampled_states:
+            for index, value in zip(model.arm_joint_indices, arm_state):
+                physics.resetJointState(
+                    robot_id,
+                    index,
+                    float(value),
+                    physicsClientId=client_id,
+                )
+            for index in model.finger_joint_indices:
+                physics.resetJointState(
+                    robot_id,
+                    index,
+                    0.04,
+                    physicsClientId=client_id,
+                )
+            physics.performCollisionDetection(physicsClientId=client_id)
+            for body_id in environment_body_ids:
+                contacts = physics.getClosestPoints(
+                    bodyA=robot_id,
+                    bodyB=int(body_id),
+                    distance=clearance_m,
+                    physicsClientId=client_id,
+                )
+                for contact in contacts:
+                    distance = float(contact[8])
+                    minimum_clearance = min(minimum_clearance, distance)
+                    if distance < clearance_m:
+                        environment_collisions += 1
+            seen_self_pairs = set()
+            contacts = physics.getClosestPoints(
+                bodyA=robot_id,
+                bodyB=robot_id,
+                distance=clearance_m,
+                physicsClientId=client_id,
+            )
+            for contact in contacts:
+                pair = tuple(sorted((int(contact[3]), int(contact[4]))))
+                if (
+                    pair[0] == pair[1]
+                    or pair in adjacent_pairs
+                    or pair in seen_self_pairs
+                ):
+                    continue
+                seen_self_pairs.add(pair)
+                distance = float(contact[8])
+                minimum_clearance = min(minimum_clearance, distance)
+                if distance < clearance_m:
+                    self_collisions += 1
+    finally:
+        for index, value in zip(model.movable_joint_indices, original_states):
+            physics.resetJointState(
+                robot_id,
+                index,
+                value,
+                physicsClientId=client_id,
+            )
+        physics.performCollisionDetection(physicsClientId=client_id)
+
+    failures = []
+    if environment_collisions:
+        failures.append("environment_clearance_failed")
+    if self_collisions:
+        failures.append("self_clearance_failed")
+    return CollisionAudit(
+        clearance_passed=not failures,
+        checked_state_count=len(sampled_states),
+        minimum_clearance_m=float(minimum_clearance),
+        environment_collision_count=environment_collisions,
+        self_collision_count=self_collisions,
+        failure_reason=";".join(failures),
+    )
+
+
+def select_candidate_pair(
+    audits: Sequence[CandidateAudit],
+) -> tuple[CandidateAudit, CandidateAudit]:
+    """Select the lowest-cost passing symmetry, preferring zero on ties."""
+
+    if len(audits) != 2:
+        raise ValueError("candidate pair must contain exactly two audits")
+    if tuple(row.candidate.symmetry_degrees for row in audits) != (0.0, 180.0):
+        raise ValueError("candidate pair must be ordered as 0 and 180 degrees")
+    passing = [index for index, row in enumerate(audits) if row.gate_passed]
+    selected_index = (
+        min(
+            passing,
+            key=lambda index: (
+                audits[index].total_normalized_joint_cost,
+                audits[index].candidate.symmetry_degrees,
+            ),
+        )
+        if passing
+        else None
+    )
+    selected = tuple(
+        replace(row, selected=index == selected_index)
+        for index, row in enumerate(audits)
+    )
+    return selected[0], selected[1]
