@@ -676,4 +676,3 @@ git commit -m "docs: record multi-object target study"
 Do not add `data/` or `uog_dissertation_outline/l4proj.blg`,
 `uog_dissertation_outline/l4proj.log`, or
 `uog_dissertation_outline/l4proj.pdf`.
-
