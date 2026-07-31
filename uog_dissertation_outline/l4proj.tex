@@ -108,7 +108,7 @@ Morrison 等人的生成式抓取卷积神经网络（Generative Grasping Convol
 后续 GR-ConvNet 以生成式残差网络同时预测质量、角度和宽度图\citep{kumra2020antipodal}，Gaussian-guided 方法进一步以高斯形式塑造抓取质量监督\citep{li2022gaussian}。这些方法的共同方向是密集多抓取，而非单个全局参数：它们保留局部候选，适合从多个可行解中选择。与此同时，它们常使用 RGB-D、较强增强和不同训练协议。论文中更高的 Cornell 百分比反映了领域进展，却不能脱离输入模态、数据划分、输出形式与评价实现组成公平排行榜。本项目采用轻量单矩形 CNN，目的不是声称达到最新水平，而是在共同定位裁剪下进行受控后端比较。
 
 \section{视觉语言模型与开放词汇定位}
-视觉语言模型（vision-language model, VLM）通过联合视觉和文本表示，使自然语言能够参与目标选择。CLIP 以大规模图文对学习可迁移的对齐空间，证明自然语言监督可以支持零样本视觉识别\citep{radford2021learning}。然而，图像级相似度不能给出目标的精确空间范围，也不包含夹爪几何，因此仍需定位模型和抓取后端。
+视觉语言模型（vision-language model, VLM）通过联合视觉和文本表示，使自然语言能够参与目标选择。CLIP 以大规模图文对学习可迁移的对齐空间，表明自然语言监督可以支持零样本视觉识别\citep{radford2021learning}。然而，图像级相似度不能给出目标的精确空间范围，也不包含夹爪几何，因此仍需定位模型和抓取后端。
 
 Grounding DINO 将 Transformer 检测器与 grounded pre-training 结合，使用类别名或指代表达进行开放集目标检测\citep{liu2023grounding}。其语言引导查询选择与跨模态解码能够在没有 Cornell 专项训练的情况下根据提示返回目标框。对单目标 Cornell 图像，这提供了一种通用前端：先把目标从背景中裁出，再用几何规则或 CNN 估计抓取。该模块的优势是把语义定位与抓取回归解耦，后端可以替换；主要风险是 prompt、置信度阈值和框边界会改变裁剪内容。每幅图都返回框的 885/885 定位覆盖率只说明接口没有空输出，并不等于框准确，也不等于抓取可行。
 
@@ -317,7 +317,7 @@ CNN 与几何的优势落在不同误差维度。单头和多头 CNN 的平均 I
 固定 85 样本中仅 CNN 成功 16 幅、仅几何成功 12 幅，显示二者互补，而不是一个后端完全包含另一个。由此可提出“学习中心和尺度、用几何约束方向”的混合后端假设，但当前实验并未实现它。固定子集本身也偏易：非学习基线在测试目录明显高于训练目录，所以较高测试值不能解释为 object-wise 泛化。
 
 \section{与既有文献的关系}
-本项目沿用 Jiang 的二维矩形和 Cornell 判定框架\citep{jiang2011efficient}。Lenz 的 RGB-D 两阶段候选评分证明了深度特征与候选重排的价值，并同时报告 image-wise/object-wise\citep{lenz2015deep}；Redmon 则把搜索改为全局直接回归和网格多抓取\citep{redmon2015real}。本研究的轻量 CNN 与 Redmon 同属“图像到矩形”范式，但输入是 Grounding DINO 产生的 RGB crop，fold 成员也由本项目生成，因此数值只能有限可比。
+本项目沿用 Jiang 的二维矩形和 Cornell 判定框架\citep{jiang2011efficient}。Lenz 的 RGB-D 两阶段候选评分展示了深度特征与候选重排的价值，并同时报告 image-wise/object-wise\citep{lenz2015deep}；Redmon 则把搜索改为全局直接回归和网格多抓取\citep{redmon2015real}。本研究的轻量 CNN 与 Redmon 同属“图像到矩形”范式，但输入是 Grounding DINO 产生的 RGB crop，fold 成员也由本项目生成，因此数值只能有限可比。
 
 GG-CNN 以深度图密集预测质量、方向和宽度\citep{morrison2018closing}，GR-ConvNet 与 Gaussian-guided 网络继续发展像素级多抓取输出\citep{kumra2020antipodal,li2022gaussian}。这些方法能保留多个局部候选，表达力高于本项目的单矩形回归；同时使用深度、增强和不同协议。它们的高 Cornell 数字用于说明技术方向，而不能与当前 RGB-only 结果直接形成排行榜。其物理实验还包含标定、运动、接触与恢复，Cornell rectangle success 不等同于物理抓取成功。
 
@@ -351,7 +351,7 @@ VLM + geometry 的 236 个失败可按指标分为 126 个仅 IoU 失败、45 �
 论文的核心发现不是某个模型在所有条件下最优，而是性能可以沿模块解释：首先缩小目标区域解决整图轮廓干扰，随后学习后端改善空间参数，最后多头分解产生较小的架构增益。连续指标、折间波动和失败案例防止二元成功率掩盖角度或尺度问题。由此，研究问题、控制变量、保存产物与结论形成一条可追溯证据链。
 
 \section{研究问题回答}
-\textbf{研究问题一：}在当前 Cornell RGB、通用 \texttt{small object} 提示和既定阈值下，Grounding DINO 定位框明显改善了原整图几何流程。成功率由 56.95\% 升至 73.33\%，IoU 与角度指标也同步改善。这证明定位范围对当前基线重要，但不证明任意 VLM 在任意场景都优于任务专用检测器。
+\textbf{研究问题一：}在当前 Cornell RGB、通用 \texttt{small object} 提示和既定阈值下，Grounding DINO 定位框明显改善了原整图几何流程。成功率由 56.95\% 升至 73.33\%，IoU 与角度指标也同步改善。这些结果表明定位范围对当前基线重要，但不证明任意 VLM 在任意场景都优于任务专用检测器。
 
 \textbf{研究问题二：}共同 VLM crop 下，CNN 更擅长中心与尺度共同决定的空间重合，几何后端则保留较稳定的方向先验。固定 85 样本中存在 16 个 CNN-only 和 12 个 geometry-only 成功，说明两者互补而非严格支配；混合后端是合理假设，但尚未验证。
 
