@@ -4,6 +4,7 @@ import pytest
 
 from src.simulation.pybullet.backprojection import (
     audit_backprojected_grasp,
+    backproject_image_coordinate,
     backproject_pixel,
     build_ray_segment,
     metric_depth_to_buffer,
@@ -112,6 +113,51 @@ def test_backprojection_recovers_hand_derived_world_point() -> None:
         (0.0, 0.0), abs=1e-6
     )
     assert reprojection.depth_m == pytest.approx(0.5, abs=1e-6)
+
+
+def test_fractional_image_coordinate_round_trips() -> None:
+    view, projection = _downward_camera_matrices()
+
+    point = backproject_image_coordinate(
+        pixel_x=1.25,
+        pixel_y=2.75,
+        depth_m=0.5,
+        width=4,
+        height=4,
+        view_matrix=view,
+        projection_matrix=projection,
+        near=0.1,
+        far=10.0,
+    )
+    reprojection = reproject_world_point(
+        point.world_xyz,
+        width=4,
+        height=4,
+        view_matrix=view,
+        projection_matrix=projection,
+    )
+
+    assert reprojection.pixel_x == pytest.approx(1.25, abs=1e-6)
+    assert reprojection.pixel_y == pytest.approx(2.75, abs=1e-6)
+    assert reprojection.depth_m == pytest.approx(0.5, abs=1e-6)
+
+
+@pytest.mark.parametrize("pixel_x", [-0.01, 4.0, np.nan])
+def test_fractional_backprojection_rejects_invalid_x(pixel_x: float) -> None:
+    view, projection = _downward_camera_matrices()
+
+    with pytest.raises(ValueError, match="image coordinate"):
+        backproject_image_coordinate(
+            pixel_x=pixel_x,
+            pixel_y=1.0,
+            depth_m=0.5,
+            width=4,
+            height=4,
+            view_matrix=view,
+            projection_matrix=projection,
+            near=0.1,
+            far=10.0,
+        )
 
 
 def _downward_camera_matrices() -> tuple[tuple[float, ...], tuple[float, ...]]:

@@ -198,13 +198,48 @@ def backproject_pixel(
         raise ValueError("image dimensions must be positive")
     if not 0 <= column < width or not 0 <= row < height:
         raise ValueError("sampled pixel must be inside image")
+    return backproject_image_coordinate(
+        float(column),
+        float(row),
+        depth_m,
+        width,
+        height,
+        view_matrix,
+        projection_matrix,
+        near,
+        far,
+    )
+
+
+def backproject_image_coordinate(
+    pixel_x: float,
+    pixel_y: float,
+    depth_m: float,
+    width: int,
+    height: int,
+    view_matrix: Sequence[float],
+    projection_matrix: Sequence[float],
+    near: float,
+    far: float,
+) -> BackprojectedPoint:
+    """Recover coordinates at a continuous image coordinate."""
+
+    if width <= 0 or height <= 0:
+        raise ValueError("image dimensions must be positive")
+    if (
+        not math.isfinite(pixel_x)
+        or not math.isfinite(pixel_y)
+        or not 0.0 <= pixel_x <= width - 1
+        or not 0.0 <= pixel_y <= height - 1
+    ):
+        raise ValueError("image coordinate must be finite and inside image")
     view = _matrix4(view_matrix, "view")
     projection = _matrix4(projection_matrix, "projection")
     depth_buffer = metric_depth_to_buffer(depth_m, near, far)
     clip = np.array(
         [
-            2.0 * (column + 0.5) / width - 1.0,
-            1.0 - 2.0 * (row + 0.5) / height,
+            2.0 * (pixel_x + 0.5) / width - 1.0,
+            1.0 - 2.0 * (pixel_y + 0.5) / height,
             2.0 * depth_buffer - 1.0,
             1.0,
         ],
