@@ -454,6 +454,10 @@ conda run -n msc-grasp python \
   src/vlm/run_cnn_cross_validation.py --mode compare
 conda run -n msc-grasp python src/shared/analyze_cornell_splits.py
 conda run -n msc-grasp python src/vlm/analyze_backend_comparison.py
+conda run -n msc-grasp python \
+  src/simulation/pybullet/run_multi_object_study.py \
+  --device cuda \
+  --output-dir data/processed/pybullet/multi_object_study
 \end{lstlisting}
 
 \subsection*{主要输出文件}
@@ -474,7 +478,14 @@ data/processed/shared/split_audit/split_metrics.json
 data/processed/shared/split_audit/same_test_subset_metrics.csv
 data/processed/vlm/backend_comparison/comparison_summary.json
 data/processed/vlm/backend_comparison/sample_comparison.csv
+data/processed/pybullet/multi_object_study/
+  backprojection_results.csv
+data/processed/pybullet/multi_object_study/
+  backprojection_summary.json
+data/processed/pybullet/multi_object_study/metadata.json
 \end{lstlisting}
+
+PyBullet metadata 保留以下证据边界：\texttt{depth\_used\_after\_2d\_prediction: true}，\texttt{segmentation\_used\_as\_coordinate\_input: false}，\texttt{ray\_test\_used\_as\_coordinate\_input: false}，\texttt{ik\_executed: false}，以及 \texttt{physical\_grasp\_executed: false}。这些字段用于防止把事后真值审计写成坐标输入，或把坐标门控写成机械臂执行。
 
 旧的单头 CNN 单次运行 73.11\% 无法由上述产物复现，因此不进入论文主要证据；它与当前可审计的多头 image-wise 五折 73.11\% 不是同一结果。
 
