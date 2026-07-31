@@ -9,7 +9,7 @@ No external grasp-execution code is copied or adapted here.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, fields
 from datetime import datetime, timezone
 import argparse
 import csv
@@ -38,6 +38,12 @@ from src.simulation.pybullet.backend_comparison import (
     EXPECTED_TARGET_BACKENDS,
     evaluate_backend_grasp,
     summarize_backend_rows,
+)
+from src.simulation.pybullet.backprojection import (
+    BackprojectionAudit,
+    RayTest,
+    audit_backprojected_grasp,
+    summarize_available_backprojection_rows,
 )
 from src.simulation.pybullet.perception import (
     Localization,
@@ -129,6 +135,8 @@ class StudyOutputPaths:
     results_csv: Path
     backend_results_csv: Path
     backend_comparison: Path
+    backprojection_results_csv: Path
+    backprojection_summary: Path
     summary: Path
     metadata: Path
     targets_dir: Path
@@ -162,6 +170,7 @@ class MultiObjectStudyDependencies:
     localize: Callable[..., Localization | None]
     load_backend: Callable[[str, Path, str], object]
     predict: Callable[..., PilotPrediction]
+    ray_test: RayTest | None = None
 
 
 def build_study_output_paths(output_dir: Path) -> StudyOutputPaths:
@@ -177,6 +186,10 @@ def build_study_output_paths(output_dir: Path) -> StudyOutputPaths:
         results_csv=root / "results.csv",
         backend_results_csv=root / "backend_results.csv",
         backend_comparison=root / "backend_comparison.json",
+        backprojection_results_csv=(
+            root / "backprojection_results.csv"
+        ),
+        backprojection_summary=root / "backprojection_summary.json",
         summary=root / "summary.json",
         metadata=root / "metadata.json",
         targets_dir=root / "targets",
@@ -216,6 +229,24 @@ def fixed_scene_config(config: MultiObjectStudyConfig) -> SceneConfig:
 def default_dependencies() -> MultiObjectStudyDependencies:
     """Bind the study to the real scene, detector, and geometry backend."""
 
+    def ray_test(
+        ray_from: tuple[float, float, float],
+        ray_to: tuple[float, float, float],
+        client_id: int,
+    ) -> tuple[int, tuple[float, float, float] | None]:
+        hit = p.rayTest(
+            ray_from,
+            ray_to,
+            physicsClientId=client_id,
+        )[0]
+        body_id = int(hit[0])
+        hit_position = (
+            None
+            if body_id < 0
+            else tuple(float(value) for value in hit[3])
+        )
+        return body_id, hit_position
+
     return MultiObjectStudyDependencies(
         scene_factory=PyBulletScene,
         capture_frame=capture_camera_frame,
@@ -223,6 +254,7 @@ def default_dependencies() -> MultiObjectStudyDependencies:
         localize=localize_object,
         load_backend=load_cnn_backend,
         predict=predict_grasp,
+        ray_test=ray_test,
     )
 
 
@@ -282,6 +314,8 @@ def _prepare_output_paths(paths: StudyOutputPaths) -> None:
         paths.results_csv,
         paths.backend_results_csv,
         paths.backend_comparison,
+        paths.backprojection_results_csv,
+        paths.backprojection_summary,
         paths.summary,
         paths.metadata,
     ):
@@ -401,6 +435,24 @@ def _write_backend_results_csv(
             )
 
 
+def _write_backprojection_results_csv(
+    path: Path,
+    rows: list[BackprojectionAudit],
+) -> None:
+    fieldnames = [field.name for field in fields(BackprojectionAudit)]
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            values = asdict(row)
+            writer.writerow(
+                {
+                    name: _csv_value(values[name])
+                    for name in fieldnames
+                }
+            )
+
+
 def _summarize_available_backend_rows(
     rows: list[dict[str, object]],
 ) -> dict[str, object]:
@@ -452,6 +504,10 @@ def _outputs_metadata(paths: StudyOutputPaths) -> dict[str, str]:
         "results_csv": str(paths.results_csv),
         "backend_results_csv": str(paths.backend_results_csv),
         "backend_comparison": str(paths.backend_comparison),
+        "backprojection_results_csv": str(
+            paths.backprojection_results_csv
+        ),
+        "backprojection_summary": str(paths.backprojection_summary),
         "summary": str(paths.summary),
         "metadata": str(paths.metadata),
         "targets_dir": str(paths.targets_dir),
@@ -491,6 +547,10 @@ def run_multi_object_study(
         },
         "performance_ranking_computed": False,
         "segmentation_used_as_model_input": False,
+        "depth_used_after_2d_prediction": True,
+        "segmentation_used_as_coordinate_input": False,
+        "ray_test_used_as_coordinate_input": False,
+        "ik_executed": False,
         "physical_grasp_executed": False,
         "outputs": _outputs_metadata(paths),
         "pybullet": {
@@ -763,12 +823,53 @@ def run_multi_object_study(
             backend_rows
         )
         _write_json(paths.backend_comparison, backend_summary)
+        failure_stage = "backprojection"
+        backprojection_rows = [
+            audit_backprojected_grasp(
+                backend_row=backend_row,
+                depth_m=frame.depth_m,
+                segmentation=frame.segmentation,
+                expected_body_id=scene.object_body_ids[
+                    str(backend_row["target"])
+                ],
+                camera_eye=camera_config.eye,
+                image_width=config.width,
+                image_height=config.height,
+                near=camera_config.near,
+                far=camera_config.far,
+                view_matrix=frame.view_matrix,
+                projection_matrix=frame.projection_matrix,
+                client_id=scene.client_id,
+                ray_test=dependencies.ray_test,
+            )
+            for backend_row in backend_rows
+        ]
+        _write_backprojection_results_csv(
+            paths.backprojection_results_csv,
+            backprojection_rows,
+        )
+        backprojection_summary = (
+            summarize_available_backprojection_rows(
+                backprojection_rows
+            )
+        )
+        _write_json(
+            paths.backprojection_summary,
+            backprojection_summary,
+        )
         summary = summarize_target_rows(rows)
         summary.update(
             backend_comparison_complete=backend_summary[
                 "backend_comparison_complete"
             ],
             backend_comparison=backend_summary,
+            backprojection_complete=backprojection_summary[
+                "backprojection_complete"
+            ],
+            backprojection_gate_passed=backprojection_summary[
+                "backprojection_gate_passed"
+            ],
+            backprojection=backprojection_summary,
         )
         summary["status"] = "success"
         _write_json(paths.summary, summary)
@@ -777,6 +878,10 @@ def run_multi_object_study(
             results=rows,
             backend_results=backend_rows,
             backend_comparison=backend_summary,
+            backprojection_results=[
+                asdict(row) for row in backprojection_rows
+            ],
+            backprojection=backprojection_summary,
             summary=summary,
         )
         _write_json(paths.metadata, metadata)

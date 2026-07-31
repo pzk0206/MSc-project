@@ -5,6 +5,7 @@ import subprocess
 import sys
 
 import numpy as np
+import pybullet as p
 
 from src.simulation.pybullet.camera import CameraFrame
 from src.simulation.pybullet.perception import Localization, PilotPrediction
@@ -55,7 +56,7 @@ class _FakeMultiObjectScene:
         self.closed = True
 
 
-def _multi_object_frame() -> CameraFrame:
+def _multi_object_frame(valid_matrices: bool = False) -> CameraFrame:
     segmentation = np.full((60, 80), -1, dtype=np.int32)
     segmentation[2:15, 2:15] = 2
     segmentation[20:30, 5:15] = 3
@@ -66,12 +67,27 @@ def _multi_object_frame() -> CameraFrame:
     rgb[segmentation == 3] = (255, 204, 0)
     rgb[segmentation == 4] = (230, 25, 25)
     rgb[segmentation == 5] = (25, 204, 25)
+    if valid_matrices:
+        view_matrix = p.computeViewMatrix(
+            cameraEyePosition=(1.0, 0.0, 1.15),
+            cameraTargetPosition=(0.5, 0.0, 0.62),
+            cameraUpVector=(0.0, 0.0, 1.0),
+        )
+        projection_matrix = p.computeProjectionMatrixFOV(
+            fov=55.0,
+            aspect=80 / 60,
+            nearVal=0.05,
+            farVal=3.0,
+        )
+    else:
+        view_matrix = tuple(float(value) for value in range(16))
+        projection_matrix = tuple(float(value) for value in range(16))
     return CameraFrame(
         rgb=rgb,
         depth_m=np.full((60, 80), 0.8, dtype=np.float32),
         segmentation=segmentation,
-        view_matrix=tuple(float(value) for value in range(16)),
-        projection_matrix=tuple(float(value) for value in range(16)),
+        view_matrix=tuple(view_matrix),
+        projection_matrix=tuple(projection_matrix),
     )
 
 
@@ -296,6 +312,96 @@ def test_backend_output_paths_and_seed_42_defaults(tmp_path: Path) -> None:
     assert paths.prediction_image("duck") == (
         tmp_path / "targets/duck/prediction.png"
     )
+
+
+def test_complete_nine_point_backprojection_gate_is_persisted(
+    tmp_path: Path,
+) -> None:
+    localizations = {
+        "yellow rubber duck": Localization(
+            box=(5, 20, 14, 29), score=0.9, label="duck"
+        ),
+        "red cube": Localization(
+            box=(25, 20, 34, 29), score=0.9, label="cube"
+        ),
+        "green sphere": Localization(
+            box=(45, 20, 54, 29), score=0.9, label="sphere"
+        ),
+        "small object": Localization(
+            box=(2, 2, 14, 14), score=0.7, label="robot"
+        ),
+    }
+
+    def predict(image_bgr, localization, backend, device, model):
+        return PilotPrediction(
+            localization=localization,
+            backend=backend,
+            grasp={
+                "center_x": (
+                    localization.box[0] + localization.box[2]
+                ) / 2,
+                "center_y": (
+                    localization.box[1] + localization.box[3]
+                ) / 2,
+                "width": 6.0,
+                "height": 3.0,
+                "angle_degrees": 0.0,
+            },
+        )
+
+    def ray_test(ray_from, ray_to, client_id):
+        assert client_id == 9
+        if ray_to[1] < -0.25:
+            body_id = 3
+        elif ray_to[1] < 0.0:
+            body_id = 4
+        else:
+            body_id = 5
+        return body_id, ray_to
+
+    summary = run_multi_object_study(
+        MultiObjectStudyConfig(
+            output_dir=tmp_path,
+            width=80,
+            height=60,
+            device="cpu",
+        ),
+        dependencies=MultiObjectStudyDependencies(
+            scene_factory=_FakeMultiObjectScene,
+            capture_frame=lambda _client, _config, _renderer: (
+                _multi_object_frame(valid_matrices=True)
+            ),
+            load_detector=lambda _model_id, _device: (object(), object()),
+            localize=lambda **kwargs: localizations[kwargs["prompt"]],
+            load_backend=lambda backend, _weights, _device: backend,
+            predict=predict,
+            ray_test=ray_test,
+        ),
+    )
+
+    paths = build_study_output_paths(tmp_path)
+    assert summary["backprojection_complete"] is True
+    assert summary["backprojection_gate_passed"] is True
+    assert summary["backprojection"]["backprojection_result_count"] == 9
+    assert paths.backprojection_results_csv.is_file()
+    assert paths.backprojection_summary.is_file()
+    with paths.backprojection_results_csv.open(
+        newline="", encoding="utf-8"
+    ) as handle:
+        rows = list(csv.DictReader(handle))
+    assert [(row["target"], row["backend"]) for row in rows] == [
+        (target, backend)
+        for target in ("duck", "cube", "sphere")
+        for backend in ("geometry", "single", "multi_head")
+    ]
+    assert all(row["gate_passed"] == "True" for row in rows)
+
+    metadata = json.loads(paths.metadata.read_text(encoding="utf-8"))
+    assert metadata["depth_used_after_2d_prediction"] is True
+    assert metadata["segmentation_used_as_coordinate_input"] is False
+    assert metadata["ray_test_used_as_coordinate_input"] is False
+    assert metadata["ik_executed"] is False
+    assert metadata["physical_grasp_executed"] is False
 
 
 def test_multi_object_cli_help_runs_from_repository_root() -> None:
