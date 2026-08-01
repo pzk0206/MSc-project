@@ -114,7 +114,7 @@ git commit -m "refactor: share pose candidate audit"
 - 产生：`load_geometry_execution_plan(path: Path) -> GeometryExecutionPlan`。
 - 消费：`ToolPose`、`CandidateAudit` 及 JSON 基本类型。
 
-- [ ] **步骤 1：写配置与往返失败测试**
+- [x] **步骤 1：写配置与往返失败测试**
 
 测试构造两个候选和一个唯一选中候选，写入再读取后要求完全相等；分别篡改
 protocol、backend、seed、候选数、selected 数、NaN、IK 长度、三个位姿高度
@@ -131,7 +131,7 @@ with pytest.raises(ValueError, match="backend must be geometry"):
     load_geometry_execution_plan(path)
 ```
 
-- [ ] **步骤 2：运行并确认按预期失败**
+- [x] **步骤 2：运行并确认按预期失败**
 
 ```bash
 /home/pzk/miniconda/envs/msc-grasp/bin/python -m pytest \
@@ -140,7 +140,7 @@ with pytest.raises(ValueError, match="backend must be geometry"):
 
 预期：因 `execution_plan` 模块不存在而导入失败。
 
-- [ ] **步骤 3：实现不可变计划、JSON 转换和加载校验**
+- [x] **步骤 3：实现不可变计划、JSON 转换和加载校验**
 
 所有浮点必须有限；四元数必须归一；每个候选必须包含七维 pregrasp、approach
 和 grasp-depth IK；候选顺序必须为 `0.0, 180.0`；只有一个候选 selected 且其
@@ -154,7 +154,7 @@ approach_z - grasp_depth_z == pytest.approx(0.015)
 `write_geometry_execution_plan` 使用 `allow_nan=False` 和 UTF-8，加载拒绝额外或
 缺失顶层字段。冻结控制协议值必须与全局约束逐项相等，防止下一阶段消费漂移。
 
-- [ ] **步骤 4：运行定向测试和编译**
+- [x] **步骤 4：运行定向测试和编译**
 
 ```bash
 /home/pzk/miniconda/envs/msc-grasp/bin/python -m pytest \
@@ -164,7 +164,7 @@ approach_z - grasp_depth_z == pytest.approx(0.015)
 git diff --check
 ```
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```bash
 git add src/simulation/pybullet/execution_plan.py \
