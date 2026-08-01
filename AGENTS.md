@@ -3,8 +3,9 @@
 ## 每次任务开始前
 
 1. 阅读 `docs/agent/CURRENT_STATUS.md`。
-2. 如果不清楚项目背景，阅读 `docs/agent/PROJECT_OVERVIEW.md`。
-3. 创建、移动或重构代码前，阅读：
+2. 阅读 `docs/agent/vlm_robotic_grasp_study_plan.md`，确认当前研究范围、阶段门控和后续顺序。
+3. 如果不清楚项目背景，阅读 `docs/agent/PROJECT_OVERVIEW.md`。
+4. 创建、移动或重构代码前，阅读：
    - `docs/agent/PROJECT_STRUCTURE.md`
    - `docs/agent/CODE_ORGANIZATION.md`
 

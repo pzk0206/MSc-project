@@ -66,14 +66,14 @@
 │   │   ├── PROJECT_OVERVIEW.md
 │   │   ├── PROJECT_STRUCTURE.md
 │   │   ├── DISSERTATION_WRITING_GUIDE.md
-│   │   └── CODE_ORGANIZATION.md
+│   │   ├── CODE_ORGANIZATION.md
+│   │   └── vlm_robotic_grasp_study_plan.md
 │   ├── debugging/
 │   │   ├── BUGLOG.md
 │   │   └── FAILURE_ANALYSIS.md
 │   ├── planning/
 │   │   ├── cnn_architecture_rationale.md
-│   │   ├── modern_2d_grasp_literature_matrix.md
-│   │   └── vlm_robotic_grasp_study_plan.md
+│   │   └── modern_2d_grasp_literature_matrix.md
 │   ├── reporting/
 │   │   ├── generate_cnn_architecture.py
 │   │   ├── generate_concise_speaking_notes_pdf.py
@@ -139,6 +139,7 @@
 | `src/simulation/pybullet/README.md` | 说明仿真命令、固定协议、评价边界、官方 PyBullet 来源和输出 |
 | `docs/planning/cnn_architecture_rationale.md` | 逐项区分当前 CNN 的文献依据与工程选择 |
 | `docs/planning/modern_2d_grasp_literature_matrix.md` | 统一比较现代二维抓取方法的输入、划分、指标和可比性 |
+| `docs/agent/vlm_robotic_grasp_study_plan.md` | 默认读取的研究总计划；记录 Cornell 范围及 PyBullet 分阶段运动、闭合、抬升和几何/多头比较门控 |
 | `docs/agent/DISSERTATION_WRITING_GUIDE.md` | 记录论文各章节目标字数、核心内容、批判性分析要求和推荐写作顺序 |
 | `docs/reporting/generate_cnn_architecture.py` | 生成论文使用的 CNN 矢量结构图 |
 | `docs/reporting/generate_supervisor_progress_report.py` | 生成三页中文导师项目进展汇报 PDF |
