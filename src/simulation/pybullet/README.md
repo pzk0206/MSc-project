@@ -7,7 +7,7 @@
 [Bullet Physics / PyBullet 官方项目](https://github.com/bulletphysics/bullet3)
 及其随包资源。这里没有复制或改编外部抓取执行代码。
 
-## 三种运行方式
+## 四种运行方式
 
 单物体感知诊断：
 
@@ -48,6 +48,21 @@ conda run -n msc-grasp python \
 位”。执行中逐步调用 `stepSimulation`，手指保持 `0.04 m` 张开，并保存状态
 轨迹、碰撞统计、summary、metadata 和三个关键帧。该阶段不靠近目标、不闭合
 夹爪、不评价接触或抬升，因此不能称为仿真抓取。
+
+分阶段物理执行的阶段 2 方块真值 pregrasp：
+
+```bash
+conda run -n msc-grasp python \
+  src/simulation/pybullet/run_truth_pregrasp.py \
+  --output-dir \
+  data/processed/pybullet/grasp_execution/stage_2_cube_pregrasp
+```
+
+该命令只读取 PyBullet 中红色方块的真值中心、姿态和 AABB 顶面，不运行
+Grounding DINO、几何后端或 CNN。程序先检查方块稳定性、末端 IK/FK 和
+`2 mm` 静态碰撞余量，再让张开的 Panda 移动到方块顶面以上 `0.12 m` 的
+俯视 pregrasp；轨迹逐步保存方块真值位姿和末端相对方块的位置。该阶段不下降
+到接触高度、不闭合、不评价接触或抬升，因此仍不能称为仿真抓取成功。
 
 上述静态审计命令为每条二维抓取生成 `0°/180°` 两个世界 `-Z` 俯视候选，检查 Panda
 七关节 IK、`5 mm/5°` FK 误差和 `2 mm` 碰撞余量。两段关节插值各采样
@@ -174,6 +189,7 @@ backend_comparison.png
 
 ## 当前边界
 
-本模块已经实现二维抓取中心反投影、确定性六自由度悬停姿态、离线 IK/FK 和
-离散碰撞余量审计。它尚未实现连续轨迹规划、机械臂控制、夹爪闭合、接触验证
-或物理抓取成功判定；静态候选通过不能称为仿真抓取成功。
+本模块已经实现二维抓取中心反投影、确定性六自由度悬停姿态、离线 IK/FK、
+离散碰撞余量审计、阶段 1 安全空中电机往返，以及阶段 2 真值方块上方
+pregrasp 到达。它尚未实现向接触高度下降、夹爪闭合、接触验证、物体抬升或
+物理抓取成功判定；当前通过结果只能说明运动与目标上方到达门控通过。
