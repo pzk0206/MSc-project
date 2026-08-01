@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 import numpy as np
 import pybullet as p
@@ -209,6 +209,7 @@ def execute_object_lift(
     environment_body_ids: Sequence[int],
     allowed_environment_link_pairs: Sequence[tuple[int, int]] = (),
     config: LiftConfig = LiftConfig(),
+    lift_complete_callback: Callable[[], None] | None = None,
     physics: Any = p,
 ) -> LiftResult:
     """Lift a contacted cube while preserving the frozen finger command."""
@@ -505,6 +506,8 @@ def execute_object_lift(
         lift_reached = (
             lift_endpoint_arm_error <= config.arm_joint_tolerance_rad
         )
+    if lift_complete_callback is not None:
+        lift_complete_callback()
     for _ in range(config.hold_steps):
         command_and_sample("lift_hold", arm_target)
 

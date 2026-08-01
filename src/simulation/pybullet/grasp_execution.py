@@ -33,6 +33,11 @@ from src.simulation.pybullet.kinematic_audit import (
     audit_pose_ik,
     resolve_panda_model,
 )
+from src.simulation.pybullet.lift_control import (
+    LiftConfig,
+    LiftResult,
+    execute_object_lift,
+)
 from src.simulation.pybullet.motion_control import (
     MotionConfig,
     MotionExecutionResult,
@@ -41,6 +46,7 @@ from src.simulation.pybullet.motion_control import (
     execute_joint_motion,
 )
 from src.simulation.pybullet.pose_generation import (
+    ToolPose,
     generate_top_down_pose_from_world_point,
 )
 from src.simulation.pybullet.run_multi_object_study import (
@@ -54,6 +60,7 @@ TARGET_XY_THRESHOLD_M = 0.005
 FINGER_OPEN_ERROR_THRESHOLD_M = 0.001
 APPROACH_STANDOFF_M = 0.02
 GRASP_DEPTH_STANDOFF_M = 0.005
+TOOL_LIFT_COMMAND_M = 0.12
 CONTACT_EVENT_FIELDS = (
     "step",
     "phase",
@@ -69,6 +76,7 @@ class TruthExecutionStage(str, Enum):
     PREGRASP = "pregrasp"
     OPEN_APPROACH = "open_approach"
     CLOSE_CONTACT = "close_contact"
+    LIFT_HOLD = "lift_hold"
 
 
 @dataclass(frozen=True)
@@ -216,6 +224,7 @@ def _maximum_displacement(
 def _trace_rows(
     results: Sequence[MotionExecutionResult],
     gripper: GripperCloseResult | None = None,
+    lift: LiftResult | None = None,
 ) -> list[dict[str, object]]:
     rows = []
     for global_step, row in enumerate(
@@ -279,6 +288,9 @@ def _trace_rows(
                 "left_normal_force": 0.0,
                 "right_normal_force": 0.0,
                 "prohibited_target_contact_count": 0,
+                "target_lift_m": "",
+                "target_table_contact": "",
+                "relative_drift_m": "",
             }
         )
     if gripper is not None:
@@ -346,6 +358,72 @@ def _trace_rows(
                     "prohibited_target_contact_count": (
                         row.prohibited_target_contact_count
                     ),
+                    "target_lift_m": "",
+                    "target_table_contact": "",
+                    "relative_drift_m": "",
+                }
+            )
+    if lift is not None:
+        for row in lift.trace:
+            rows.append(
+                {
+                    "step": len(rows) + 1,
+                    "phase": row.phase,
+                    "commanded_arm_positions": json.dumps(
+                        row.commanded_arm_positions,
+                        separators=(",", ":"),
+                    ),
+                    "actual_arm_positions": json.dumps(
+                        row.actual_arm_positions,
+                        separators=(",", ":"),
+                    ),
+                    "actual_finger_positions": json.dumps(
+                        row.actual_finger_positions,
+                        separators=(",", ":"),
+                    ),
+                    "commanded_finger_positions": json.dumps(
+                        row.commanded_finger_positions,
+                        separators=(",", ":"),
+                    ),
+                    "actual_tool_position": json.dumps(
+                        row.actual_tool_position,
+                        separators=(",", ":"),
+                    ),
+                    "actual_tool_quaternion_xyzw": json.dumps(
+                        row.actual_tool_quaternion_xyzw,
+                        separators=(",", ":"),
+                    ),
+                    "cube_position": json.dumps(
+                        row.target_position,
+                        separators=(",", ":"),
+                    ),
+                    "cube_quaternion_xyzw": json.dumps(
+                        row.target_quaternion_xyzw,
+                        separators=(",", ":"),
+                    ),
+                    "tool_relative_to_cube": json.dumps(
+                        row.tool_relative_to_target,
+                        separators=(",", ":"),
+                    ),
+                    "maximum_joint_error_rad": (
+                        row.maximum_arm_joint_error_rad
+                    ),
+                    "minimum_clearance_m": "",
+                    "environment_collision_count": (
+                        row.environment_collision_count
+                    ),
+                    "self_collision_count": row.self_collision_count,
+                    "left_finger_contact": row.left_finger_contact,
+                    "right_finger_contact": row.right_finger_contact,
+                    "bilateral_contact": row.bilateral_contact,
+                    "left_normal_force": row.left_normal_force,
+                    "right_normal_force": row.right_normal_force,
+                    "prohibited_target_contact_count": (
+                        row.prohibited_target_contact_count
+                    ),
+                    "target_lift_m": row.target_lift_m,
+                    "target_table_contact": row.target_table_contact,
+                    "relative_drift_m": row.relative_drift_m,
                 }
             )
     return rows
@@ -374,6 +452,9 @@ def _write_trace(path: Path, rows: list[dict[str, object]]) -> None:
         "left_normal_force",
         "right_normal_force",
         "prohibited_target_contact_count",
+        "target_lift_m",
+        "target_table_contact",
+        "relative_drift_m",
     )
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
@@ -404,14 +485,20 @@ def _failure_artifacts(
 ) -> dict[str, object]:
     open_approach = stage is TruthExecutionStage.OPEN_APPROACH
     close_contact = stage is TruthExecutionStage.CLOSE_CONTACT
+    lift_hold = stage is TruthExecutionStage.LIFT_HOLD
+    contact_stage = close_contact or lift_hold
     summary: dict[str, object] = {
         "stage": (
-            "cube_truth_bilateral_contact"
-            if close_contact
+            "cube_truth_lift_hold"
+            if lift_hold
             else (
-                "cube_truth_open_approach"
-                if open_approach
-                else "cube_truth_pregrasp"
+                "cube_truth_bilateral_contact"
+                if close_contact
+                else (
+                    "cube_truth_open_approach"
+                    if open_approach
+                    else "cube_truth_pregrasp"
+                )
             )
         ),
         "target_stability_preflight_passed": (
@@ -432,7 +519,7 @@ def _failure_artifacts(
         "failure_stage": failure_stage,
         "scientific_gate_passed": False,
     }
-    if open_approach or close_contact:
+    if open_approach or contact_stage:
         summary.update(
             {
                 "approach_reached": False,
@@ -441,7 +528,7 @@ def _failure_artifacts(
                 "gripper_close_command_count": 0,
             }
         )
-    if close_contact:
+    if contact_stage:
         summary.update(
             {
                 "grasp_depth_reached": False,
@@ -452,6 +539,20 @@ def _failure_artifacts(
                 "bilateral_contact_acquired": False,
                 "trailing_bilateral_contact_steps": 0,
                 "target_contact_gate_passed": False,
+            }
+        )
+    if lift_hold:
+        summary.update(
+            {
+                "lift_preflight_ik_fk_passed": False,
+                "lift_preflight_clearance_passed": False,
+                "lift_executed": False,
+                "lift_reached": False,
+                "object_lift_gate_passed": False,
+                "table_release_gate_passed": False,
+                "relative_stability_gate_passed": False,
+                "lift_hold_gate_passed": False,
+                "physical_grasp_success": False,
             }
         )
     metadata = _metadata(
@@ -480,15 +581,21 @@ def _metadata(
 ) -> dict[str, object]:
     open_approach = stage is TruthExecutionStage.OPEN_APPROACH
     close_contact = stage is TruthExecutionStage.CLOSE_CONTACT
+    lift_hold = stage is TruthExecutionStage.LIFT_HOLD
+    contact_stage = close_contact or lift_hold
     return {
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "protocol": (
-            "panda_cube_truth_bilateral_contact"
-            if close_contact
+            "panda_cube_truth_lift_hold"
+            if lift_hold
             else (
-                "panda_cube_truth_open_approach"
-                if open_approach
-                else "panda_cube_truth_pregrasp"
+                "panda_cube_truth_bilateral_contact"
+                if close_contact
+                else (
+                    "panda_cube_truth_open_approach"
+                    if open_approach
+                    else "panda_cube_truth_pregrasp"
+                )
             )
         ),
         "config": {
@@ -504,23 +611,27 @@ def _metadata(
         "perception_executed": False,
         "target_approach_executed": target_approach_executed,
         "vertical_approach_executed": (
-            (open_approach or close_contact) and target_approach_executed
+            (open_approach or contact_stage) and target_approach_executed
         ),
         "descent_to_contact_executed": (
-            close_contact and bool(summary.get("grasp_depth_reached"))
+            contact_stage and bool(summary.get("grasp_depth_reached"))
         ),
         "gripper_close_commanded": (
-            close_contact and bool(summary.get("gripper_close_executed"))
+            contact_stage and bool(summary.get("gripper_close_executed"))
         ),
         "gripper_closed": (
-            close_contact and bool(summary.get("target_contact_gate_passed"))
+            contact_stage and bool(summary.get("target_contact_gate_passed"))
         ),
-        "contact_evaluated": close_contact,
+        "contact_evaluated": contact_stage,
         "target_contacted": (
-            close_contact and bool(summary.get("target_contact_gate_passed"))
+            contact_stage and bool(summary.get("target_contact_gate_passed"))
         ),
-        "object_lifted": False,
-        "physical_grasp_executed": False,
+        "object_lifted": (
+            lift_hold and bool(summary.get("object_lift_gate_passed"))
+        ),
+        "physical_grasp_executed": (
+            lift_hold and bool(summary.get("physical_grasp_success"))
+        ),
         **(details or {}),
         "summary": summary,
     }
@@ -632,8 +743,31 @@ def run_truth_execution(
                 model,
                 grasp_depth_pose,
             )
-            if stage is TruthExecutionStage.CLOSE_CONTACT
+            if stage in (
+                TruthExecutionStage.CLOSE_CONTACT,
+                TruthExecutionStage.LIFT_HOLD,
+            )
             else approach_ik
+        )
+        lift_config = LiftConfig()
+        lift_pose = ToolPose(
+            position=(
+                grasp_depth_pose.position[0],
+                grasp_depth_pose.position[1],
+                grasp_depth_pose.position[2]
+                + lift_config.tool_lift_command_m,
+            ),
+            quaternion_xyzw=grasp_depth_pose.quaternion_xyzw,
+        )
+        lift_ik = (
+            audit_pose_ik(
+                scene.bodies.robot,
+                scene.client_id,
+                model,
+                lift_pose,
+            )
+            if stage is TruthExecutionStage.LIFT_HOLD
+            else grasp_depth_ik
         )
         environment = (
             scene.bodies.plane,
@@ -648,6 +782,8 @@ def run_truth_execution(
             or approach_ik.solution is None
             or not grasp_depth_ik.gate_passed
             or grasp_depth_ik.solution is None
+            or not lift_ik.gate_passed
+            or lift_ik.solution is None
         ):
             return _failure_artifacts(
                 config=config,
@@ -680,6 +816,26 @@ def run_truth_execution(
                 ik_fk_passed=True,
                 clearance_passed=False,
             )
+        lift_environment = (
+            scene.bodies.plane,
+            scene.bodies.table,
+            scene.object_body_ids["duck"],
+            scene.object_body_ids["sphere"],
+        )
+        lift_preflight_clearance = (
+            audit_joint_path_clearance(
+                robot_id=scene.bodies.robot,
+                client_id=scene.client_id,
+                model=model,
+                start_solution=grasp_depth_ik.solution,
+                pregrasp_solution=grasp_depth_ik.solution,
+                standoff_solution=lift_ik.solution,
+                environment_body_ids=lift_environment,
+                allowed_environment_link_pairs=allowed_mounting_pair,
+            )
+            if stage is TruthExecutionStage.LIFT_HOLD
+            else preflight_clearance
+        )
 
         motion_start_target_position = _target_position(
             cube_id,
@@ -720,6 +876,9 @@ def run_truth_execution(
         grasp_depth_rgb = None
         gripper_result = None
         closed_rgb = None
+        lift_result = None
+        lifted_rgb = None
+        lift_hold_rgb = None
         if (
             stage is not TruthExecutionStage.PREGRASP
             and pregrasp_dynamic_gate
@@ -737,7 +896,10 @@ def run_truth_execution(
                 config=motion_config,
             )
             approach_rgb = _capture_rgb(scene)
-            if stage is TruthExecutionStage.CLOSE_CONTACT:
+            if stage in (
+                TruthExecutionStage.CLOSE_CONTACT,
+                TruthExecutionStage.LIFT_HOLD,
+            ):
                 approach_row = approach_execution.trace[-1]
                 approach_reached_for_contact = dict(
                     approach_execution.segment_reached
@@ -855,8 +1017,52 @@ def run_truth_execution(
                             ),
                         )
                         closed_rgb = _capture_rgb(scene)
+                        if (
+                            stage is TruthExecutionStage.LIFT_HOLD
+                            and gripper_result.gate_passed
+                            and lift_preflight_clearance.clearance_passed
+                        ):
+                            close_row = gripper_result.trace[-1]
 
-    if stage is TruthExecutionStage.CLOSE_CONTACT:
+                            def capture_lifted() -> None:
+                                nonlocal lifted_rgb
+                                lifted_rgb = _capture_rgb(scene)
+
+                            lift_result = execute_object_lift(
+                                robot_id=scene.bodies.robot,
+                                target_body_id=cube_id,
+                                table_body_id=scene.bodies.table,
+                                client_id=scene.client_id,
+                                model=model,
+                                lift_arm_positions=lift_ik.solution,
+                                lift_target_pose=lift_pose,
+                                frozen_finger_positions=(
+                                    close_row.commanded_finger_positions
+                                ),
+                                reference_target_position=(
+                                    close_row.target_position
+                                ),
+                                reference_tool_relative_to_target=tuple(
+                                    tool - target
+                                    for tool, target in zip(
+                                        close_row.actual_tool_position,
+                                        close_row.target_position,
+                                    )
+                                ),
+                                environment_body_ids=lift_environment,
+                                allowed_environment_link_pairs=(
+                                    allowed_mounting_pair
+                                ),
+                                config=lift_config,
+                                lift_complete_callback=capture_lifted,
+                            )
+                            lift_hold_rgb = _capture_rgb(scene)
+
+    if stage in (
+        TruthExecutionStage.CLOSE_CONTACT,
+        TruthExecutionStage.LIFT_HOLD,
+    ):
+        lift_stage = stage is TruthExecutionStage.LIFT_HOLD
         motion_results = tuple(
             result
             for result in (
@@ -934,21 +1140,36 @@ def run_truth_execution(
             gripper_result.environment_collision_count
             if gripper_result is not None
             else 0
+        ) + (
+            lift_result.environment_collision_count
+            if lift_result is not None
+            else 0
         )
         self_collisions = motion_self_collisions + (
             gripper_result.self_collision_count
             if gripper_result is not None
+            else 0
+        ) + (
+            lift_result.self_collision_count
+            if lift_result is not None
             else 0
         )
         prohibited_target_contacts = (
             gripper_result.prohibited_target_contact_count
             if gripper_result is not None
             else 0
+        ) + (
+            lift_result.prohibited_target_contact_count
+            if lift_result is not None
+            else 0
         )
         all_states_finite = all(
             result.all_states_finite for result in motion_results
         ) and (
             gripper_result is not None and gripper_result.all_states_finite
+        ) and (
+            not lift_stage
+            or (lift_result is not None and lift_result.all_states_finite)
         )
         target_undisturbed_gate = (
             maximum_target_displacement
@@ -968,7 +1189,7 @@ def run_truth_execution(
         target_contact_gate = (
             gripper_result is not None and gripper_result.gate_passed
         )
-        scientific_gate = (
+        contact_scientific_gate = (
             pregrasp_ik.gate_passed
             and approach_ik.gate_passed
             and grasp_depth_ik.gate_passed
@@ -982,6 +1203,25 @@ def run_truth_execution(
             and prohibited_target_contacts == 0
             and all_states_finite
         )
+        lift_preflight_ik_fk_passed = (
+            lift_stage and lift_ik.gate_passed
+        )
+        lift_preflight_clearance_passed = (
+            lift_stage and lift_preflight_clearance.clearance_passed
+        )
+        physical_grasp_success = (
+            lift_stage
+            and lift_result is not None
+            and lift_result.gate_passed
+        )
+        scientific_gate = contact_scientific_gate and (
+            not lift_stage
+            or (
+                lift_preflight_ik_fk_passed
+                and lift_preflight_clearance_passed
+                and physical_grasp_success
+            )
+        )
         if approach_execution is None:
             failure_stage = "pregrasp_dynamic_gate"
         elif grasp_depth_execution is None:
@@ -990,10 +1230,20 @@ def run_truth_execution(
             failure_stage = "grasp_depth_dynamic_gate"
         elif not gripper_result.gate_passed:
             failure_stage = "bilateral_contact_gate"
+        elif lift_stage and not lift_preflight_clearance_passed:
+            failure_stage = "lift_preflight_clearance"
+        elif lift_stage and lift_result is None:
+            failure_stage = "lift_not_executed"
+        elif lift_stage and not lift_result.gate_passed:
+            failure_stage = "lift_hold_gate"
         else:
             failure_stage = ""
         summary = {
-            "stage": "cube_truth_bilateral_contact",
+            "stage": (
+                "cube_truth_lift_hold"
+                if lift_stage
+                else "cube_truth_bilateral_contact"
+            ),
             "target_stability_preflight_passed": True,
             "preflight_ik_fk_passed": (
                 pregrasp_ik.gate_passed
@@ -1034,6 +1284,99 @@ def run_truth_execution(
                 else 0
             ),
             "target_contact_gate_passed": target_contact_gate,
+            "lift_preflight_ik_fk_passed": (
+                lift_preflight_ik_fk_passed
+            ),
+            "lift_preflight_clearance_passed": (
+                lift_preflight_clearance_passed
+            ),
+            "lift_executed": lift_result is not None,
+            "lift_reached": (
+                lift_result.lift_reached
+                if lift_result is not None
+                else False
+            ),
+            "lift_settle_steps": (
+                lift_result.lift_settle_steps
+                if lift_result is not None
+                else 0
+            ),
+            "object_lift_gate_passed": (
+                lift_result.object_lift_gate_passed
+                if lift_result is not None
+                else False
+            ),
+            "table_release_gate_passed": (
+                lift_result.table_release_gate_passed
+                if lift_result is not None
+                else False
+            ),
+            "relative_stability_gate_passed": (
+                lift_result.relative_stability_gate_passed
+                if lift_result is not None
+                else False
+            ),
+            "lift_hold_gate_passed": (
+                lift_result.lift_hold_gate_passed
+                if lift_result is not None
+                else False
+            ),
+            "physical_grasp_success": physical_grasp_success,
+            "minimum_hold_object_lift_m": (
+                lift_result.minimum_hold_object_lift_m
+                if lift_result is not None
+                else None
+            ),
+            "final_object_lift_m": (
+                lift_result.final_object_lift_m
+                if lift_result is not None
+                else None
+            ),
+            "hold_target_table_contact_count": (
+                lift_result.hold_target_table_contact_count
+                if lift_result is not None
+                else None
+            ),
+            "maximum_hold_relative_drift_m": (
+                lift_result.maximum_hold_relative_drift_m
+                if lift_result is not None
+                else None
+            ),
+            "trailing_lift_bilateral_contact_steps": (
+                lift_result.trailing_bilateral_contact_steps
+                if lift_result is not None
+                else 0
+            ),
+            "lift_endpoint_position_error_m": (
+                lift_result.endpoint_position_error_m
+                if lift_result is not None
+                else None
+            ),
+            "lift_endpoint_orientation_error_degrees": (
+                lift_result.endpoint_orientation_error_degrees
+                if lift_result is not None
+                else None
+            ),
+            "lift_endpoint_arm_error_rad": (
+                lift_result.lift_endpoint_arm_error_rad
+                if lift_result is not None
+                else None
+            ),
+            "maximum_lift_left_normal_force_n": (
+                lift_result.maximum_left_normal_force
+                if lift_result is not None
+                else 0.0
+            ),
+            "maximum_lift_right_normal_force_n": (
+                lift_result.maximum_right_normal_force
+                if lift_result is not None
+                else 0.0
+            ),
+            "total_target_table_contact_count": (
+                lift_result.total_target_table_contact_count
+                if lift_result is not None
+                else None
+            ),
             "maximum_left_normal_force_n": (
                 gripper_result.maximum_left_normal_force
                 if gripper_result is not None
@@ -1072,12 +1415,27 @@ def run_truth_execution(
                 if gripper_result is not None
                 else 0
             ),
+            "lift_step_count": (
+                len(lift_result.trace)
+                if lift_result is not None
+                else 0
+            ),
             "executed_step_count": sum(
                 len(result.trace) for result in motion_results
             )
             + (
                 len(gripper_result.trace)
                 if gripper_result is not None
+                else 0
+            )
+            + (
+                len(lift_result.trace)
+                if lift_result is not None
+                else 0
+            ),
+            "lift_executed_step_count": (
+                len(lift_result.trace)
+                if lift_result is not None
                 else 0
             ),
             "environment_collision_count": environment_collisions,
@@ -1107,28 +1465,50 @@ def run_truth_execution(
                 "grasp_depth_height_above_cube_top_m": (
                     GRASP_DEPTH_STANDOFF_M
                 ),
-                "object_lifted": False,
-                "physical_grasp_executed": False,
+                "lift_tool_position": lift_pose.position,
+                "tool_lift_command_m": TOOL_LIFT_COMMAND_M,
+                "object_lifted": physical_grasp_success,
+                "physical_grasp_executed": physical_grasp_success,
             },
         )
-        trace_rows = _trace_rows(motion_results, gripper_result)
+        trace_rows = _trace_rows(
+            motion_results,
+            gripper_result,
+            lift_result,
+        )
         motion_step_count = sum(
             len(result.trace) for result in motion_results
         )
-        contact_rows = (
-            [
+        contact_rows = []
+        if gripper_result is not None:
+            contact_rows.extend(
+                [
+                    {
+                        "step": motion_step_count + event.step,
+                        "phase": event.phase,
+                        "robot_link": event.robot_link,
+                        "target_body": event.target_body,
+                        "normal_force": event.normal_force,
+                    }
+                    for event in gripper_result.contact_events
+                ]
+            )
+        if lift_result is not None:
+            lift_offset = motion_step_count + (
+                len(gripper_result.trace)
+                if gripper_result is not None
+                else 0
+            )
+            contact_rows.extend(
                 {
-                    "step": motion_step_count + event.step,
+                    "step": lift_offset + event.step,
                     "phase": event.phase,
                     "robot_link": event.robot_link,
                     "target_body": event.target_body,
                     "normal_force": event.normal_force,
                 }
-                for event in gripper_result.contact_events
-            ]
-            if gripper_result is not None
-            else []
-        )
+                for event in lift_result.contact_events
+            )
         _write_trace(output_dir / "state_trace.csv", trace_rows)
         _write_contact_events(
             output_dir / "contact_events.csv",
@@ -1144,6 +1524,10 @@ def run_truth_execution(
             _write_rgb(output_dir / "grasp_depth.png", grasp_depth_rgb)
         if closed_rgb is not None:
             _write_rgb(output_dir / "closed.png", closed_rgb)
+        if lifted_rgb is not None:
+            _write_rgb(output_dir / "lifted.png", lifted_rgb)
+        if lift_hold_rgb is not None:
+            _write_rgb(output_dir / "lift_hold.png", lift_hold_rgb)
         return summary
 
     if stage is TruthExecutionStage.OPEN_APPROACH:

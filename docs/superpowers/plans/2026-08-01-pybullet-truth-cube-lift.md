@@ -114,7 +114,7 @@ git diff --check
 
 预期：配置与真实抬升测试全部通过。
 
-- [ ] **步骤 6：提交**
+- [x] **步骤 6：提交**
 
 ```bash
 git add src/simulation/pybullet/lift_control.py tests/simulation/test_pybullet_lift_control.py
@@ -133,7 +133,7 @@ git commit -m "feat: lift and hold truth cube"
 - `TruthLiftConfig(output_dir: Path = Path("data/processed/pybullet/grasp_execution/stage_5_truth_cube_lift"), seed: int = 42, gui: bool = False, target_name: str = "cube", stability_steps: int = 60, maximum_target_displacement_m: float = 0.001)`。
 - `run_truth_lift(config: TruthLiftConfig) -> dict[str, object]`。
 
-- [ ] **步骤 1：写完整阶段 5 失败测试**
+- [x] **步骤 1：写完整阶段 5 失败测试**
 
 真实 runner 测试要求 `summary["stage"] == "cube_truth_lift_hold"`，阶段 2--4
 全部门控为真，且：
@@ -152,7 +152,7 @@ assert summary["scientific_gate_passed"] is True
 轨迹 phase 必须精确包含七种状态，闭合与抬升接触事件均非空；七张 PNG 均为
 640×480。metadata 中真值、运动、闭合、接触、抬升和物理抓取为真，感知为假。
 
-- [ ] **步骤 2：确认测试按预期失败**
+- [x] **步骤 2：确认测试按预期失败**
 
 ```bash
 /home/pzk/miniconda/envs/msc-grasp/bin/python -m pytest tests/simulation/test_pybullet_truth_lift.py -v
@@ -160,25 +160,25 @@ assert summary["scientific_gate_passed"] is True
 
 预期：因 `run_truth_lift` 不存在而导入失败。
 
-- [ ] **步骤 3：接入 LIFT_HOLD 阶段与抬升预检**
+- [x] **步骤 3：接入 LIFT_HOLD 阶段与抬升预检**
 
 把阶段 5 纳入阶段 4 的全部前置执行。闭合门控通过后，用抓取深度工具姿态
 世界 Z `+0.12 m` 构造 `ToolPose` 并运行 `audit_pose_ik`；抬升静态路径环境
 排除目标 cube，但保留 plane、table、duck、sphere 和既有安装豁免。
 
-- [ ] **步骤 4：调用控制器并合并七阶段证据**
+- [x] **步骤 4：调用控制器并合并七阶段证据**
 
 只有 lift IK/FK 和路径预检通过才调用 `execute_object_lift`。扩展 trace 写入
 cube lift、table contact、relative drift 字段；合并 gripper/lift contact
 events 并给出全局 step。保存 lifted（抬升段结束）和 lift_hold（保持结束）图。
 
-- [ ] **步骤 5：实现 summary、metadata 和失败边界**
+- [x] **步骤 5：实现 summary、metadata 和失败边界**
 
 总门控要求阶段 4、lift 预检和 `LiftResult.gate_passed` 同时为真。成功时
 `object_lifted/physical_grasp_executed/physical_grasp_success=true`；任何前置
 失败时不得调用抬升，抬升物理门控失败时保留真实 trace 并保持成功字段为假。
 
-- [ ] **步骤 6：运行阶段 2--5 回归和编译**
+- [x] **步骤 6：运行阶段 2--5 回归和编译**
 
 ```bash
 /home/pzk/miniconda/envs/msc-grasp/bin/python -m pytest \
