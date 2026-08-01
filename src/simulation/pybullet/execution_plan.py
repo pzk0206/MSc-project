@@ -240,8 +240,8 @@ class PlannedPoseCandidate:
             (self.minimum_clearance_m, self.total_normalized_joint_cost),
             "candidate audit values",
         )
-        if self.checked_state_count != 41:
-            raise ValueError("candidate audit must check 41 states")
+        if self.checked_state_count != 82:
+            raise ValueError("candidate audit must check 82 states")
         if min(self.environment_collision_count, self.self_collision_count) < 0:
             raise ValueError("collision counts cannot be negative")
         if self.gate_passed and not (

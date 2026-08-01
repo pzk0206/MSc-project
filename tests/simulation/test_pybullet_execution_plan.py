@@ -32,7 +32,7 @@ def _candidate(symmetry: float, selected: bool) -> PlannedPoseCandidate:
         grasp_depth_ik=(0.2,) * 7,
         ik_fk_passed=True,
         clearance_passed=True,
-        checked_state_count=41,
+        checked_state_count=82,
         minimum_clearance_m=0.002,
         environment_collision_count=0,
         self_collision_count=0,

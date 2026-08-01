@@ -38,7 +38,7 @@ Grounding DINO `red cube` 定位、geometry 抓取框预测、中心深度反投
 - `PerceptionEvidence`：prompt、定位框/分数、geometry 中心/尺寸/角度、采样
   像素、深度、世界表面点以及事后真值审计结果。
 - `PlannedPoseCandidate`：对称角、pregrasp/approach/grasp-depth 三个位姿、
-  七关节 IK 解、IK/FK 门控、41 状态静态碰撞结果、代价和选择标志。
+  七关节 IK 解、IK/FK 门控、两组共 82 状态静态碰撞结果、代价和选择标志。
 - `GeometryExecutionPlan`：协议版本、场景 seed、相机参数、RGB SHA-256、
   后端名、两个候选、唯一选中候选和冻结控制协议摘要。
 
@@ -55,9 +55,11 @@ runner 负责同一场景编排和证据落盘：
 4. 对预测中心执行现有最近像素半向上采样和深度反投影。
 5. 以预测角度生成两个对称世界 `-Z` 候选，并为每个候选另外生成
    `0.005 m` 抓取深度姿态。
-6. 对两个候选分别执行现有 IK/FK、关节限位和中立位→pregrasp→抓取深度
-   41 状态碰撞审计。静态安全审计允许 Panda 底座—桌面安装接触，但不豁免
-   cube、duck 或 sphere。
+6. 对两个候选分别执行现有 IK/FK、关节限位和两组静态碰撞审计。第一组检查
+   中立位→pregrasp→`0.02 m` 接触前姿态，41 个状态中不豁免 cube、duck 或
+   sphere。第二组检查中立位→pregrasp→`0.005 m` 抓取深度，41 个状态中只
+   排除预期接触目标 cube，仍检查桌面、duck、sphere 和自碰撞；两组均只允许
+   Panda 底座—桌面安装接触。
 7. 使用既有确定性候选选择规则：只在通过全部预检的候选中按关节路程代价
    选择，代价相同优先 `0°`。
 8. segmentation、目标框 IoU 和射线命中仅在预测产生后作为审计字段；不得
@@ -75,7 +77,7 @@ runner 负责同一场景编排和证据落盘：
   → RGB + box → geometry rectangle
   → rectangle centre + depth + matrices → world surface point
   → rectangle angle → 0°/180° top-down poses
-  → IK/FK + 41-state clearance
+  → IK/FK + 41-state pre-contact + 41-state grasp-depth clearance
   → unique selected candidate
   → execution_plan.json
 ```
@@ -92,7 +94,8 @@ segmentation、cube body ID 和 `rayTest` 只从三维点之后流向审计字�
 - geometry 参数有限、宽高为正、中心在图像内；
 - 中心深度有效，坐标有限，重投影门控通过；
 - segmentation 与射线事后命中 cube；
-- 恰好两个对称候选完成审计，至少一个通过 IK/FK、关节限位与 `2 mm` 余量；
+- 恰好两个对称候选完成 82 状态审计，至少一个同时通过两组 IK/FK、关节限位
+  与 `2 mm` 非目标余量；
 - 恰好一个候选被确定性选择；
 - 没有执行电机、闭合、接触、抬升或物理抓取。
 
@@ -106,7 +109,7 @@ segmentation、cube body ID 和 `rayTest` 只从三维点之后流向审计字�
 
 - `rgb.png`、`depth.npy`、`segmentation.png`；
 - `localization.png`、`geometry_prediction.png`；
-- `candidates.csv`：两个候选的位姿、IK/FK、碰撞、代价和选择结果；
+- `candidates.csv`：两个候选的位姿、IK/FK、两组碰撞、代价和选择结果；
 - `summary.json`、`metadata.json`；
 - `execution_plan.json`：仅总门控通过时存在。
 

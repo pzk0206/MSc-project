@@ -21,7 +21,8 @@ pytest。
 - 相机固定 640×480；深度只在二维预测后使用。
 - segmentation、目标真值框和射线只作事后门控，不得修正预测。
 - 接触前/抓取深度/pregrasp 偏移固定为 0.02/0.005/0.10 m。
-- 静态碰撞余量固定 0.002 m，每段 21 个采样，共 41 个唯一状态。
+- 静态碰撞余量固定 0.002 m；接触前与抓取深度各审计 41 个状态，每个候选
+  共 82 个状态。接触前审计包含 cube，抓取深度审计只排除预期目标 cube。
 - Stage 6A 不调用位置电机、连续轨迹、夹爪闭合、接触控制或抬升控制。
 - 正式 VLM 证据必须使用真实 CUDA；无 CUDA 时失败，不静默回退 CPU。
 
@@ -186,7 +187,7 @@ git commit -m "feat: define frozen geometry execution plan"
 - 产生：`run_geometry_execution_preflight(config: GeometryPreflightConfig, dependencies: GeometryPreflightDependencies | None = None) -> dict[str, object]`。
 - 消费：任务 1 的 `audit_pose_candidate/select_candidate_pair`；任务 2 的计划类型；现有 `CameraConfig`、`predict_grasp`、`audit_backprojected_grasp`、`generate_top_down_pose_candidates`、`evaluate_target_selection`。
 
-- [ ] **步骤 1：写同场景真实静态失败测试**
+- [x] **步骤 1：写同场景真实静态失败测试**
 
 测试注入固定 localization 和 geometry predictor，但使用真实
 `PyBulletScene/capture_camera_frame`、真实深度、反投影、IK/FK 和碰撞：
@@ -207,13 +208,13 @@ assert (tmp_path / "execution_plan.json").is_file()
 `0°/180°`、所有输入有限。metadata 必须明确
 `motor_control_executed/trajectory_executed/gripper_closed/contact_evaluated/object_lifted/physical_grasp_executed=false`。
 
-- [ ] **步骤 2：写失败保真测试**
+- [x] **步骤 2：写失败保真测试**
 
 先在目录放置旧 `execution_plan.json`，再分别注入无检测、geometry 异常和
 目标错误 localization。每次运行后旧计划必须被删除，summary/metadata 保留
 准确 `failure_stage`，所有执行标志为假。
 
-- [ ] **步骤 3：运行并确认按预期失败**
+- [x] **步骤 3：运行并确认按预期失败**
 
 ```bash
 /home/pzk/miniconda/envs/msc-grasp/bin/python -m pytest \
@@ -222,28 +223,30 @@ assert (tmp_path / "execution_plan.json").is_file()
 
 预期：因 runner 模块不存在而导入失败。
 
-- [ ] **步骤 4：实现配置、依赖和输出准备**
+- [x] **步骤 4：实现配置、依赖和输出准备**
 
 配置拒绝非 seed 42、非 cube/red cube/geometry、非法阈值或非 640×480 固定
 协议。开始运行时创建目录并删除所有旧 Stage 6A 文件，尤其是旧计划。真实依赖
 只加载 Grounding DINO；geometry 的 model 参数必须是 `None`。
 
-- [ ] **步骤 5：实现感知、三维与候选门控**
+- [x] **步骤 5：实现感知、三维与候选门控**
 
 场景只调用 `scene.step(60)` 一次；拍摄后不再 step。保存原始帧，运行定位和
 geometry，并用现有审计函数产生 target selection、backend audit 和
 backprojection audit。使用 backprojection 的 sampled column/row/depth 与
 geometry angle 生成两个候选；对每个候选额外用相同世界表面点/方向生成
-`0.005 m` grasp-depth pose并求 IK，将两个候选交给共享静态审计和确定性选择。
+`0.005 m` grasp-depth pose并求 IK。接触前候选对包含 cube 的完整环境审计 41
+状态；抓取深度候选对只排除预期目标 cube、继续审计其他环境与自碰撞 41 状态。
+合并两组门控和 82 状态统计后再执行确定性选择。
 
-- [ ] **步骤 6：实现计划、summary、metadata 和可视化**
+- [x] **步骤 6：实现计划、summary、metadata 和可视化**
 
 仅当感知、反投影、两个候选审计和唯一选择门控全部满足时写计划。summary 至少
 记录 detection IoU、geometry 参数、world point、两个候选门控、选择角、最小
 余量和总门控。metadata 记录相机矩阵、scene object poses、数据流边界、RGB
 哈希以及全 false 执行标志。保存 localization 和 geometry prediction 图。
 
-- [ ] **步骤 7：运行 Stage 6A 与既有静态审计回归**
+- [x] **步骤 7：运行 Stage 6A 与既有静态审计回归**
 
 ```bash
 /home/pzk/miniconda/envs/msc-grasp/bin/python -m pytest \
@@ -256,7 +259,7 @@ geometry angle 生成两个候选；对每个候选额外用相同世界表面�
 git diff --check
 ```
 
-- [ ] **步骤 8：提交**
+- [x] **步骤 8：提交**
 
 ```bash
 git add src/simulation/pybullet/run_geometry_execution_preflight.py \
@@ -290,7 +293,7 @@ git commit -m "feat: preflight geometry grasp execution plan"
 - [ ] **步骤 2：核验产物与图像**
 
 独立读取 summary、metadata、candidate CSV 和计划，核对 RGB 哈希、同一场景、
-零 capture 后 step、两个候选、唯一选择、41 状态、目标/射线审计和全部非执行
+零 capture 后 step、两个候选、唯一选择、每候选 82 状态、目标/射线审计和全部非执行
 标志。人工查看 localization/geometry prediction 是否确实位于红色方块。
 
 - [ ] **步骤 3：更新中文记录**
@@ -326,6 +329,6 @@ git commit -m "docs: record geometry execution preflight evidence"
 - 任务 1 产生的 `audit_pose_candidate` 与任务 3 消费接口一致；任务 2 的计划
   类型同时供任务 3 写入和未来 Stage 6B 加载。
 - 所有阈值与设计一致：0.25 检测阈值、0.02/0.005/0.10 m 位姿偏移、2 mm
-  余量、每段 21 个采样、seed 42 和 CUDA 正式证据。
+  余量、两组各 41 状态、seed 42 和 CUDA 正式证据。
 - 未包含多头 CNN、物理执行、协议批量化或成功率统计，范围保持为一个可独立
   验收的 Stage 6A。
