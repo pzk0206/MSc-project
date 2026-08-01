@@ -2,9 +2,17 @@
 
 ## 目标与边界
 
-阶段 4 从已经通过的 cube 接触前姿态开始，保持 Panda 手臂在 approach 关节
-目标，只闭合两个手指并验证左右手指是否都与目标 cube 建立真实 PyBullet
-接触。检测到双指接触后保持夹爪，不执行任何抬升轨迹。
+阶段 4 从已经通过的 cube 接触前姿态开始，先让张开的夹爪从 cube 顶面上方
+`0.02 m` 短距离垂直下探到顶面上方 `0.005 m` 的可闭合抓取深度，再保持
+Panda 手臂并只闭合两个手指，验证左右手指是否都与目标 cube 建立真实
+PyBullet 接触。检测到双指接触后保持夹爪，不执行任何抬升轨迹。
+
+真实几何诊断表明，阶段 3 的 `0.02 m` 姿态中，手指碰撞几何最低点仍比 cube
+顶面高约 `0.00873 m`；即使双指接近零位，每指到 cube 的最近距离仍约
+`0.01173 m`，因此只闭合不可能产生接触。单变量诊断将最终工具高度改为顶面
+上方 `0.005 m` 后，双指在闭合过程中自然取得并保持接触，且无禁止碰撞。
+因此保留阶段 3 的安全接触前成果，并把额外 `0.015 m` 开放夹爪下探作为阶段
+4 的必要前置动作，而不是改写阶段 3 的既有结论或放宽接触门槛。
 
 本阶段通过只能表述为“闭合与双指目标接触通过”，不能表述为抓取成功。只有
 后续阶段 5 将物体抬升并保持，才可以把一次试验计入仿真抓取成功率。
@@ -31,8 +39,10 @@
 阶段输出目录。
 
 现有 `grasp_execution.py` 新增 `CLOSE_CONTACT` 阶段：复用阶段 2/3 的目标
-稳定、双姿态 IK/FK、静态余量、pregrasp 和 approach 动态门控；只有上述门控
-都通过才调用夹爪控制。新增 `run_truth_contact.py` 作为阶段 4 薄 CLI。
+稳定、双姿态 IK/FK、静态余量、pregrasp 和 approach 动态门控；通过阶段 3
+的 `0.02 m` 接触前姿态后，增加到 `0.005 m` 抓取深度的开放夹爪短距离动态
+门控，只有上述门控都通过才调用夹爪控制。新增 `run_truth_contact.py` 作为阶段
+4 薄 CLI。
 
 ## 接触定义与安全分类
 
@@ -76,8 +86,9 @@ cube 与桌面接触是本阶段的预期状态，不计为禁止碰撞。cube �
 - 左/右/双指有效接触状态和各指最大法向力；
 - 手臂保持误差、禁止环境接触数、自碰撞数和数值有限性。
 
-阶段 4 的 `state_trace.csv` 合并 pregrasp、approach、close 和 contact_hold
-四种 phase；新增 `commanded_finger_positions`、左右接触状态和法向力字段。
+阶段 4 的 `state_trace.csv` 合并 pregrasp、approach、grasp_depth、close 和
+contact_hold 五种 phase；新增 `commanded_finger_positions`、左右接触状态和
+法向力字段。
 阶段 2/3 的同名 CSV 继续可读，新字段对运动阶段填入开放夹爪命令和零接触。
 
 ## 成功门控与失败处理
@@ -85,6 +96,8 @@ cube 与桌面接触是本阶段的预期状态，不计为禁止碰撞。cube �
 阶段 4 总科学门控必须同时满足：
 
 - 阶段 3 的全部前置门控通过；
+- 开放夹爪从接触前高度到抓取深度的短距离下探通过动态门控，且下探期间没有
+  目标接触；
 - 闭合控制实际执行，且至少出现一次双指同时有效目标接触；
 - 运行结束时连续双指接触步数不少于 60；
 - 左、右手指各至少记录一条有限正法向力目标接触；
@@ -104,7 +117,8 @@ cube 与桌面接触是本阶段的预期状态，不计为禁止碰撞。cube �
 - `state_trace.csv`；
 - 非空 `contact_events.csv`；
 - `summary.json`、`metadata.json`；
-- `start.png`、`pregrasp.png`、`approach.png`、`closed.png`。
+- `start.png`、`pregrasp.png`、`approach.png`、`grasp_depth.png`、
+  `closed.png`。
 
 成功时 metadata 设置 `gripper_close_commanded=true`、`gripper_closed=true`、
 `contact_evaluated=true`、`target_contacted=true`；这里的 `gripper_closed` 表示
@@ -120,7 +134,7 @@ cube 与桌面接触是本阶段的预期状态，不计为禁止碰撞。cube �
 
 ## 自检
 
-- 阶段 4 只增加闭合和目标接触，没有加入抬升。
+- 阶段 4 只增加必要的开放夹爪抓取深度下探、闭合和目标接触，没有加入抬升。
 - 有效接触由真实 body/link/正法向力共同定义，不以手指位置代替接触。
 - 双指接触必须同一步出现并在末段持续，不接受左右手指不同时的历史接触拼接。
 - 失败时不自动改变已冻结的 approach 位姿或研究阈值。
