@@ -40,7 +40,7 @@ pytest。
 - 产生：`select_candidate_pair(audits: Sequence[CandidateAudit]) -> tuple[CandidateAudit, CandidateAudit]`（保持现有接口与确定性规则）。
 - 消费：现有 `audit_pose_ik`、`audit_joint_path_clearance` 和 `CandidateAudit`。
 
-- [ ] **步骤 1：写共享接口失败测试**
+- [x] **步骤 1：写共享接口失败测试**
 
 在真实 Panda 测试场景中生成两个 cube 俯视候选，调用公开
 `audit_pose_candidate`，断言 pregrasp/standoff IK 解均为七维、碰撞检查状态
@@ -61,7 +61,7 @@ assert len(audit.standoff_ik.solution) == 7
 assert audit.collision.checked_state_count == 41
 ```
 
-- [ ] **步骤 2：运行并确认按预期失败**
+- [x] **步骤 2：运行并确认按预期失败**
 
 ```bash
 /home/pzk/miniconda/envs/msc-grasp/bin/python -m pytest \
@@ -70,14 +70,14 @@ assert audit.collision.checked_state_count == 41
 
 预期：因 `audit_pose_candidate` 尚未导出而导入失败。
 
-- [ ] **步骤 3：移动最小共享实现**
+- [x] **步骤 3：移动最小共享实现**
 
 将 `run_pose_ik_study.py` 中 `_failed_collision`、`_joint_cost` 和
 `_audit_candidate` 的职责移入 `kinematic_audit.py`，公开名为
 `audit_pose_candidate`。保留相同公式、异常文本、关节恢复、阈值和
 `select_candidate_pair` 行为；离线 runner 改为导入共享函数，不保留重复实现。
 
-- [ ] **步骤 4：运行定向与离线回归**
+- [x] **步骤 4：运行定向与离线回归**
 
 ```bash
 /home/pzk/miniconda/envs/msc-grasp/bin/python -m pytest \
@@ -89,7 +89,7 @@ assert audit.collision.checked_state_count == 41
 git diff --check
 ```
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```bash
 git add src/simulation/pybullet/kinematic_audit.py \

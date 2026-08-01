@@ -24,15 +24,11 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.simulation.pybullet.backend_comparison import EXPECTED_TARGET_BACKENDS
 from src.simulation.pybullet.kinematic_audit import (
     CandidateAudit,
-    CollisionAudit,
-    PandaModelInfo,
-    audit_joint_path_clearance,
-    audit_pose_ik,
+    audit_pose_candidate,
     resolve_panda_model,
     select_candidate_pair,
 )
 from src.simulation.pybullet.pose_generation import (
-    PoseCandidate,
     generate_top_down_pose_candidates,
 )
 from src.simulation.pybullet.run_multi_object_study import (
@@ -150,89 +146,6 @@ def load_pose_ik_inputs(input_dir: Path) -> PoseIKInputs:
     return PoseIKInputs(backend_rows, backprojection_rows, metadata)
 
 
-def _failed_collision(reason: str) -> CollisionAudit:
-    return CollisionAudit(False, 0, 0.0, 0, 0, reason)
-
-
-def _joint_cost(
-    model: PandaModelInfo,
-    pregrasp: tuple[float, ...],
-    standoff: tuple[float, ...],
-) -> float:
-    arm_offsets = tuple(
-        model.movable_joint_indices.index(index)
-        for index in model.arm_joint_indices
-    )
-    rests = tuple(model.rest_poses[offset] for offset in arm_offsets)
-    ranges = tuple(model.joint_ranges[offset] for offset in arm_offsets)
-    return sum(
-        ((end - start) / joint_range) ** 2
-        for start, end, joint_range in zip(rests, pregrasp, ranges)
-    ) + sum(
-        ((end - start) / joint_range) ** 2
-        for start, end, joint_range in zip(pregrasp, standoff, ranges)
-    )
-
-
-def _audit_candidate(
-    candidate: PoseCandidate,
-    *,
-    robot_id: int,
-    client_id: int,
-    model: PandaModelInfo,
-    environment_body_ids: tuple[int, ...],
-    allowed_environment_link_pairs: tuple[tuple[int, int], ...],
-) -> CandidateAudit:
-    pregrasp = audit_pose_ik(
-        robot_id, client_id, model, candidate.pregrasp_pose
-    )
-    standoff = audit_pose_ik(
-        robot_id, client_id, model, candidate.surface_standoff_pose
-    )
-    failures = []
-    if not pregrasp.gate_passed:
-        failures.append(f"pregrasp:{pregrasp.failure_reason}")
-    if not standoff.gate_passed:
-        failures.append(f"standoff:{standoff.failure_reason}")
-    if pregrasp.solution is not None and standoff.solution is not None:
-        arm_offsets = tuple(
-            model.movable_joint_indices.index(index)
-            for index in model.arm_joint_indices
-        )
-        arm_rest = tuple(model.rest_poses[offset] for offset in arm_offsets)
-        try:
-            collision = audit_joint_path_clearance(
-                robot_id=robot_id,
-                client_id=client_id,
-                model=model,
-                start_solution=arm_rest,
-                pregrasp_solution=pregrasp.solution,
-                standoff_solution=standoff.solution,
-                environment_body_ids=environment_body_ids,
-                allowed_environment_link_pairs=allowed_environment_link_pairs,
-            )
-        except Exception as exc:  # PyBullet exposes backend-specific errors.
-            collision = _failed_collision(
-                f"collision_audit_error:{type(exc).__name__}:{exc}"
-            )
-        cost = _joint_cost(model, pregrasp.solution, standoff.solution)
-    else:
-        collision = _failed_collision("ik_solution_unavailable")
-        cost = math.inf
-    if not collision.clearance_passed:
-        failures.append(f"collision:{collision.failure_reason}")
-    return CandidateAudit(
-        candidate=candidate,
-        pregrasp_ik=pregrasp,
-        standoff_ik=standoff,
-        collision=collision,
-        total_normalized_joint_cost=cost,
-        gate_passed=not failures,
-        selected=False,
-        failure_reason=";".join(failures),
-    )
-
-
 def _json_value(value: Any) -> str:
     return json.dumps(value, separators=(",", ":"))
 
@@ -334,7 +247,7 @@ def run_pose_ik_study(config: PoseIKStudyConfig) -> dict[str, object]:
                 far=float(camera_config["far"]),
             )
             pair = tuple(
-                _audit_candidate(
+                audit_pose_candidate(
                     candidate,
                     robot_id=scene.bodies.robot,
                     client_id=scene.client_id,

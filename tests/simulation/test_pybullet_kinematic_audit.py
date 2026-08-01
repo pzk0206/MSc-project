@@ -7,6 +7,7 @@ from src.simulation.pybullet.kinematic_audit import (
     CollisionAudit,
     IKPoseAudit,
     audit_joint_path_clearance,
+    audit_pose_candidate,
     audit_pose_ik,
     resolve_panda_model,
     select_candidate_pair,
@@ -194,6 +195,76 @@ def test_real_collision_audit_checks_41_states_and_restores() -> None:
         )
         assert audit.checked_state_count == 41
         assert after == pytest.approx(before)
+    finally:
+        p.disconnect(client_id)
+
+
+def test_real_pose_candidate_audit_checks_ik_clearance_and_restores() -> None:
+    client_id, robot_id = _panda_client()
+    try:
+        model = resolve_panda_model(robot_id, client_id)
+        original = tuple(
+            p.getJointState(
+                robot_id, index, physicsClientId=client_id
+            )[0]
+            for index in model.movable_joint_indices
+        )
+        for index, value in zip(
+            model.movable_joint_indices,
+            model.rest_poses,
+        ):
+            p.resetJointState(
+                robot_id,
+                index,
+                value,
+                physicsClientId=client_id,
+            )
+        state = p.getLinkState(
+            robot_id,
+            model.tool_link_index,
+            computeForwardKinematics=True,
+            physicsClientId=client_id,
+        )
+        for index, value in zip(model.movable_joint_indices, original):
+            p.resetJointState(
+                robot_id,
+                index,
+                value,
+                physicsClientId=client_id,
+            )
+        pose = ToolPose(tuple(state[4]), tuple(state[5]))
+        candidate = PoseCandidate(
+            target="cube",
+            backend="geometry",
+            symmetry_degrees=0.0,
+            finger_axis_world=(1.0, 0.0, 0.0),
+            closing_axis_world=(0.0, -1.0, 0.0),
+            approach_axis_world=(0.0, 0.0, -1.0),
+            surface_standoff_pose=pose,
+            pregrasp_pose=pose,
+        )
+
+        audit = audit_pose_candidate(
+            candidate,
+            robot_id=robot_id,
+            client_id=client_id,
+            model=model,
+            environment_body_ids=(),
+        )
+
+        after = tuple(
+            p.getJointState(
+                robot_id, index, physicsClientId=client_id
+            )[0]
+            for index in model.movable_joint_indices
+        )
+        assert audit.pregrasp_ik.solution is not None
+        assert len(audit.pregrasp_ik.solution) == 7
+        assert audit.standoff_ik.solution is not None
+        assert len(audit.standoff_ik.solution) == 7
+        assert audit.collision.checked_state_count == 41
+        assert audit.gate_passed is True
+        assert after == pytest.approx(original)
     finally:
         p.disconnect(client_id)
 
