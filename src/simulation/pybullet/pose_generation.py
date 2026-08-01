@@ -124,6 +124,54 @@ def _candidate(
     )
 
 
+def generate_top_down_pose_from_world_point(
+    *,
+    target: str,
+    backend: str,
+    surface_point: Sequence[float],
+    finger_axis_world: Sequence[float],
+    surface_standoff_m: float = 0.02,
+    pregrasp_offset_m: float = 0.10,
+    symmetry_degrees: float = 0.0,
+) -> PoseCandidate:
+    """Generate one top-down hover pose from a verified world point."""
+
+    if not target.strip() or not backend.strip():
+        raise ValueError("target and backend must be non-empty")
+    if not all(
+        math.isfinite(value)
+        for value in (
+            surface_standoff_m,
+            pregrasp_offset_m,
+            symmetry_degrees,
+        )
+    ):
+        raise ValueError("pose-generation parameters must be finite")
+    if surface_standoff_m <= 0.0 or pregrasp_offset_m <= 0.0:
+        raise ValueError("pose offsets must be positive")
+    surface = np.asarray(surface_point, dtype=np.float64)
+    finger_axis = np.asarray(finger_axis_world, dtype=np.float64)
+    if surface.shape != (3,) or not np.all(np.isfinite(surface)):
+        raise ValueError("surface point must be a finite 3-D vector")
+    if finger_axis.shape != (3,) or not np.all(np.isfinite(finger_axis)):
+        raise ValueError("finger axis must be a finite 3-D vector")
+    finger_axis = finger_axis.copy()
+    finger_axis[2] = 0.0
+    norm = float(np.linalg.norm(finger_axis))
+    if norm < 1e-8:
+        raise ValueError("finger axis must have a non-zero XY projection")
+    finger_axis /= norm
+    return _candidate(
+        target,
+        backend,
+        symmetry_degrees,
+        finger_axis,
+        surface,
+        surface_standoff_m,
+        pregrasp_offset_m,
+    )
+
+
 def generate_top_down_pose_candidates(
     *,
     target: str,
@@ -214,22 +262,22 @@ def generate_top_down_pose_candidates(
     finger_axis = tangent / norm
     surface_point = np.asarray(surface.world_xyz, dtype=np.float64)
     return (
-        _candidate(
-            target,
-            backend,
-            0.0,
-            finger_axis,
-            surface_point,
-            surface_standoff_m,
-            pregrasp_offset_m,
+        generate_top_down_pose_from_world_point(
+            target=target,
+            backend=backend,
+            symmetry_degrees=0.0,
+            finger_axis_world=finger_axis,
+            surface_point=surface_point,
+            surface_standoff_m=surface_standoff_m,
+            pregrasp_offset_m=pregrasp_offset_m,
         ),
-        _candidate(
-            target,
-            backend,
-            180.0,
-            -finger_axis,
-            surface_point,
-            surface_standoff_m,
-            pregrasp_offset_m,
+        generate_top_down_pose_from_world_point(
+            target=target,
+            backend=backend,
+            symmetry_degrees=180.0,
+            finger_axis_world=-finger_axis,
+            surface_point=surface_point,
+            surface_standoff_m=surface_standoff_m,
+            pregrasp_offset_m=pregrasp_offset_m,
         ),
     )
