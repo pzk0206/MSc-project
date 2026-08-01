@@ -206,9 +206,14 @@ def _maximum_displacement(
     )
 
 
-def _trace_rows(result: MotionExecutionResult) -> list[dict[str, object]]:
+def _trace_rows(
+    results: Sequence[MotionExecutionResult],
+) -> list[dict[str, object]]:
     rows = []
-    for row in result.trace:
+    for global_step, row in enumerate(
+        (row for result in results for row in result.trace),
+        start=1,
+    ):
         target = row.tracked_body_poses[0]
         relative = tuple(
             tool - cube
@@ -216,7 +221,7 @@ def _trace_rows(result: MotionExecutionResult) -> list[dict[str, object]]:
         )
         rows.append(
             {
-                "step": row.step,
+                "step": global_step,
                 "phase": row.phase,
                 "commanded_arm_positions": json.dumps(
                     row.commanded_arm_positions,
@@ -297,6 +302,7 @@ def _write_contact_events(
 def _failure_artifacts(
     *,
     config: TruthExecutionConfig,
+    stage: TruthExecutionStage,
     output_dir: Path,
     start_rgb: np.ndarray,
     failure_stage: str,
@@ -304,8 +310,13 @@ def _failure_artifacts(
     ik_fk_passed: bool,
     clearance_passed: bool,
 ) -> dict[str, object]:
+    open_approach = stage is TruthExecutionStage.OPEN_APPROACH
     summary: dict[str, object] = {
-        "stage": "cube_truth_pregrasp",
+        "stage": (
+            "cube_truth_open_approach"
+            if open_approach
+            else "cube_truth_pregrasp"
+        ),
         "target_stability_preflight_passed": (
             stability_displacement_m
             <= config.maximum_target_displacement_m
@@ -324,8 +335,18 @@ def _failure_artifacts(
         "failure_stage": failure_stage,
         "scientific_gate_passed": False,
     }
+    if open_approach:
+        summary.update(
+            {
+                "approach_reached": False,
+                "approach_endpoint_pose_gate_passed": False,
+                "approach_height_gate_passed": False,
+                "gripper_close_command_count": 0,
+            }
+        )
     metadata = _metadata(
         config=config,
+        stage=stage,
         summary=summary,
         motor_control_executed=False,
         target_approach_executed=False,
@@ -341,14 +362,20 @@ def _failure_artifacts(
 def _metadata(
     *,
     config: TruthExecutionConfig,
+    stage: TruthExecutionStage,
     summary: dict[str, object],
     motor_control_executed: bool,
     target_approach_executed: bool,
     details: dict[str, object] | None = None,
 ) -> dict[str, object]:
+    open_approach = stage is TruthExecutionStage.OPEN_APPROACH
     return {
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
-        "protocol": "panda_cube_truth_pregrasp",
+        "protocol": (
+            "panda_cube_truth_open_approach"
+            if open_approach
+            else "panda_cube_truth_pregrasp"
+        ),
         "config": {
             **asdict(config),
             "output_dir": str(config.output_dir),
@@ -361,6 +388,9 @@ def _metadata(
         "trajectory_executed": motor_control_executed,
         "perception_executed": False,
         "target_approach_executed": target_approach_executed,
+        "vertical_approach_executed": (
+            open_approach and target_approach_executed
+        ),
         "descent_to_contact_executed": False,
         "gripper_close_commanded": False,
         "gripper_closed": False,
@@ -377,9 +407,6 @@ def run_truth_execution(
     stage: TruthExecutionStage,
 ) -> dict[str, object]:
     """Execute one truth-pose stage within its declared boundary."""
-
-    if stage is not TruthExecutionStage.PREGRASP:
-        raise ValueError(f"truth execution stage is not implemented: {stage}")
 
     output_dir = Path(config.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -418,6 +445,7 @@ def run_truth_execution(
         if stability_displacement > config.maximum_target_displacement_m:
             return _failure_artifacts(
                 config=config,
+                stage=stage,
                 output_dir=output_dir,
                 start_rgb=start_rgb,
                 failure_stage="target_stability_preflight",
@@ -447,11 +475,22 @@ def run_truth_execution(
             finger_axis_world=finger_axis,
         )
         pregrasp_pose = candidate.pregrasp_pose
+        approach_pose = candidate.surface_standoff_pose
         pregrasp_ik = audit_pose_ik(
             scene.bodies.robot,
             scene.client_id,
             model,
             pregrasp_pose,
+        )
+        approach_ik = (
+            audit_pose_ik(
+                scene.bodies.robot,
+                scene.client_id,
+                model,
+                approach_pose,
+            )
+            if stage is TruthExecutionStage.OPEN_APPROACH
+            else pregrasp_ik
         )
         environment = (
             scene.bodies.plane,
@@ -459,9 +498,15 @@ def run_truth_execution(
             *scene.object_body_ids.values(),
         )
         allowed_mounting_pair = ((-1, scene.bodies.table),)
-        if not pregrasp_ik.gate_passed or pregrasp_ik.solution is None:
+        if (
+            not pregrasp_ik.gate_passed
+            or pregrasp_ik.solution is None
+            or not approach_ik.gate_passed
+            or approach_ik.solution is None
+        ):
             return _failure_artifacts(
                 config=config,
+                stage=stage,
                 output_dir=output_dir,
                 start_rgb=start_rgb,
                 failure_stage="preflight_ik",
@@ -475,13 +520,14 @@ def run_truth_execution(
             model=model,
             start_solution=neutral,
             pregrasp_solution=pregrasp_ik.solution,
-            standoff_solution=pregrasp_ik.solution,
+            standoff_solution=approach_ik.solution,
             environment_body_ids=environment,
             allowed_environment_link_pairs=allowed_mounting_pair,
         )
         if not preflight_clearance.clearance_passed:
             return _failure_artifacts(
                 config=config,
+                stage=stage,
                 output_dir=output_dir,
                 start_rgb=start_rgb,
                 failure_stage="preflight_clearance",
@@ -495,7 +541,7 @@ def run_truth_execution(
             scene.client_id,
         )
         motion_config = MotionConfig(joint_tolerance_rad=0.002)
-        execution = execute_joint_motion(
+        pregrasp_execution = execute_joint_motion(
             robot_id=scene.bodies.robot,
             client_id=scene.client_id,
             model=model,
@@ -508,7 +554,253 @@ def run_truth_execution(
             config=motion_config,
         )
         pregrasp_rgb = _capture_rgb(scene)
+        pregrasp_reached = dict(pregrasp_execution.segment_reached)[
+            "pregrasp"
+        ]
+        pregrasp_position_error, pregrasp_orientation_error = _pose_errors(
+            pregrasp_execution.trace[-1],
+            pregrasp_pose.position,
+            pregrasp_pose.quaternion_xyzw,
+        )
+        pregrasp_dynamic_gate = (
+            pregrasp_execution.gate_passed
+            and pregrasp_reached
+            and pregrasp_position_error <= POSITION_ERROR_THRESHOLD_M
+            and pregrasp_orientation_error
+            <= ORIENTATION_ERROR_THRESHOLD_DEGREES
+        )
+        approach_execution = None
+        approach_rgb = None
+        if (
+            stage is TruthExecutionStage.OPEN_APPROACH
+            and pregrasp_dynamic_gate
+        ):
+            approach_execution = execute_joint_motion(
+                robot_id=scene.bodies.robot,
+                client_id=scene.client_id,
+                model=model,
+                segments=(
+                    MotionSegment("approach", approach_ik.solution),
+                ),
+                environment_body_ids=environment,
+                allowed_environment_link_pairs=allowed_mounting_pair,
+                tracked_body_ids=(cube_id,),
+                config=motion_config,
+            )
+            approach_rgb = _capture_rgb(scene)
 
+    if stage is TruthExecutionStage.OPEN_APPROACH:
+        if approach_execution is None or approach_rgb is None:
+            summary = {
+                "stage": "cube_truth_open_approach",
+                "target_stability_preflight_passed": True,
+                "preflight_ik_fk_passed": True,
+                "preflight_clearance_passed": True,
+                "pregrasp_reached": pregrasp_reached,
+                "approach_reached": False,
+                "approach_endpoint_pose_gate_passed": False,
+                "target_xy_gate_passed": False,
+                "approach_height_gate_passed": False,
+                "target_undisturbed_gate_passed": False,
+                "fingers_open_gate_passed": False,
+                "gripper_close_command_count": 0,
+                "executed_step_count": len(pregrasp_execution.trace),
+                "failure_stage": "pregrasp_dynamic_gate",
+                "scientific_gate_passed": False,
+            }
+            metadata = _metadata(
+                config=config,
+                stage=stage,
+                summary=summary,
+                motor_control_executed=True,
+                target_approach_executed=False,
+            )
+            _write_trace(
+                output_dir / "state_trace.csv",
+                _trace_rows((pregrasp_execution,)),
+            )
+            _write_contact_events(output_dir / "contact_events.csv", [])
+            _write_json(output_dir / "summary.json", summary)
+            _write_json(output_dir / "metadata.json", metadata)
+            _write_rgb(output_dir / "start.png", start_rgb)
+            _write_rgb(output_dir / "pregrasp.png", pregrasp_rgb)
+            return summary
+
+        results = (pregrasp_execution, approach_execution)
+        final_row = approach_execution.trace[-1]
+        final_cube_position = final_row.tracked_body_poses[0].position
+        approach_position_error, approach_orientation_error = _pose_errors(
+            final_row,
+            approach_pose.position,
+            approach_pose.quaternion_xyzw,
+        )
+        target_xy_error = float(
+            np.linalg.norm(
+                np.asarray(final_row.actual_tool_position[:2])
+                - np.asarray(final_cube_position[:2])
+            )
+        )
+        approach_height_above_cube_top = (
+            final_row.actual_tool_position[2] - cube_top_z
+        )
+        approach_height_error = abs(
+            approach_height_above_cube_top - 0.02
+        )
+        motion_target_displacement = _maximum_displacement(
+            motion_start_target_position,
+            tuple(
+                row.tracked_body_poses[0].position
+                for result in results
+                for row in result.trace
+            ),
+        )
+        maximum_target_displacement = max(
+            stability_displacement,
+            motion_target_displacement,
+        )
+        maximum_finger_open_error = max(
+            abs(value - 0.04)
+            for result in results
+            for row in result.trace
+            for value in row.actual_finger_positions
+        )
+        approach_reached = dict(approach_execution.segment_reached)[
+            "approach"
+        ]
+        approach_endpoint_gate = (
+            approach_position_error <= POSITION_ERROR_THRESHOLD_M
+            and approach_orientation_error
+            <= ORIENTATION_ERROR_THRESHOLD_DEGREES
+        )
+        target_xy_gate = target_xy_error <= TARGET_XY_THRESHOLD_M
+        approach_height_gate = approach_height_error <= 0.005
+        target_undisturbed_gate = (
+            maximum_target_displacement
+            <= config.maximum_target_displacement_m
+        )
+        fingers_open_gate = (
+            maximum_finger_open_error <= FINGER_OPEN_ERROR_THRESHOLD_M
+        )
+        environment_collisions = sum(
+            result.environment_collision_count for result in results
+        )
+        self_collisions = sum(
+            result.self_collision_count for result in results
+        )
+        minimum_clearance = min(
+            result.minimum_clearance_m for result in results
+        )
+        all_states_finite = all(
+            result.all_states_finite for result in results
+        )
+        scientific_gate = (
+            pregrasp_ik.gate_passed
+            and approach_ik.gate_passed
+            and preflight_clearance.clearance_passed
+            and pregrasp_dynamic_gate
+            and approach_execution.gate_passed
+            and approach_reached
+            and approach_endpoint_gate
+            and target_xy_gate
+            and approach_height_gate
+            and target_undisturbed_gate
+            and fingers_open_gate
+            and environment_collisions == 0
+            and self_collisions == 0
+            and all_states_finite
+        )
+        summary = {
+            "stage": "cube_truth_open_approach",
+            "target_stability_preflight_passed": True,
+            "preflight_ik_fk_passed": (
+                pregrasp_ik.gate_passed and approach_ik.gate_passed
+            ),
+            "preflight_clearance_passed": (
+                preflight_clearance.clearance_passed
+            ),
+            "pregrasp_reached": pregrasp_reached,
+            "approach_reached": approach_reached,
+            "approach_endpoint_pose_gate_passed": approach_endpoint_gate,
+            "target_xy_gate_passed": target_xy_gate,
+            "approach_height_gate_passed": approach_height_gate,
+            "target_undisturbed_gate_passed": target_undisturbed_gate,
+            "fingers_open_gate_passed": fingers_open_gate,
+            "gripper_close_command_count": 0,
+            "pregrasp_position_error_m": pregrasp_position_error,
+            "pregrasp_orientation_error_degrees": (
+                pregrasp_orientation_error
+            ),
+            "approach_position_error_m": approach_position_error,
+            "approach_orientation_error_degrees": (
+                approach_orientation_error
+            ),
+            "target_xy_error_m": target_xy_error,
+            "approach_height_above_cube_top_m": (
+                approach_height_above_cube_top
+            ),
+            "approach_height_error_m": approach_height_error,
+            "maximum_target_preflight_displacement_m": (
+                stability_displacement
+            ),
+            "maximum_target_motion_displacement_m": (
+                motion_target_displacement
+            ),
+            "maximum_target_displacement_m": maximum_target_displacement,
+            "maximum_finger_open_error_m": maximum_finger_open_error,
+            "pregrasp_step_count": len(pregrasp_execution.trace),
+            "approach_step_count": len(approach_execution.trace),
+            "executed_step_count": sum(
+                len(result.trace) for result in results
+            ),
+            "minimum_clearance_m": minimum_clearance,
+            "environment_collision_count": environment_collisions,
+            "self_collision_count": self_collisions,
+            "all_states_finite": all_states_finite,
+            "scientific_gate_passed": scientific_gate,
+        }
+        metadata = _metadata(
+            config=config,
+            stage=stage,
+            summary=summary,
+            motor_control_executed=True,
+            target_approach_executed=True,
+            details={
+                "cube_body_id": cube_id,
+                "cube_motion_start_position": motion_start_target_position,
+                "cube_motion_start_quaternion_xyzw": cube_quaternion,
+                "cube_top_z_m": cube_top_z,
+                "pregrasp_tool_position": pregrasp_pose.position,
+                "approach_tool_position": approach_pose.position,
+                "tool_quaternion_xyzw": approach_pose.quaternion_xyzw,
+                "pregrasp_height_above_cube_top_m": 0.12,
+                "approach_height_above_cube_top_m": 0.02,
+                "planned_vertical_descent_m": 0.10,
+                "thresholds": {
+                    "position_error_m": POSITION_ERROR_THRESHOLD_M,
+                    "orientation_error_degrees": (
+                        ORIENTATION_ERROR_THRESHOLD_DEGREES
+                    ),
+                    "target_xy_error_m": TARGET_XY_THRESHOLD_M,
+                    "approach_height_error_m": 0.005,
+                    "target_displacement_m": (
+                        config.maximum_target_displacement_m
+                    ),
+                    "joint_tolerance_rad": motion_config.joint_tolerance_rad,
+                    "finger_open_error_m": FINGER_OPEN_ERROR_THRESHOLD_M,
+                    "collision_clearance_m": motion_config.clearance_m,
+                },
+            },
+        )
+        _write_trace(output_dir / "state_trace.csv", _trace_rows(results))
+        _write_contact_events(output_dir / "contact_events.csv", [])
+        _write_json(output_dir / "summary.json", summary)
+        _write_json(output_dir / "metadata.json", metadata)
+        _write_rgb(output_dir / "start.png", start_rgb)
+        _write_rgb(output_dir / "pregrasp.png", pregrasp_rgb)
+        _write_rgb(output_dir / "approach.png", approach_rgb)
+        return summary
+
+    execution = pregrasp_execution
     final_row = execution.trace[-1]
     final_cube_position = final_row.tracked_body_poses[0].position
     position_error, orientation_error = _pose_errors(
@@ -591,6 +883,7 @@ def run_truth_execution(
     }
     metadata = _metadata(
         config=config,
+        stage=stage,
         summary=summary,
         motor_control_executed=True,
         target_approach_executed=True,
@@ -619,7 +912,10 @@ def run_truth_execution(
             },
         },
     )
-    _write_trace(output_dir / "state_trace.csv", _trace_rows(execution))
+    _write_trace(
+        output_dir / "state_trace.csv",
+        _trace_rows((execution,)),
+    )
     _write_contact_events(output_dir / "contact_events.csv", [])
     _write_json(output_dir / "summary.json", summary)
     _write_json(output_dir / "metadata.json", metadata)
