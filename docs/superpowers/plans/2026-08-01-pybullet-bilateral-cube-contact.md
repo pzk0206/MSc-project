@@ -107,7 +107,7 @@ assert result.gate_passed is True
 
 预期：配置与真实接触测试全部通过。
 
-- [ ] **步骤 6：提交**
+- [x] **步骤 6：提交**
 
 ```bash
 git add src/simulation/pybullet/gripper_control.py tests/simulation/test_pybullet_gripper_control.py
@@ -126,7 +126,7 @@ git commit -m "feat: control Panda bilateral cube contact"
 - `TruthContactConfig(output_dir: Path = Path("data/processed/pybullet/grasp_execution/stage_4_bilateral_contact"), seed: int = 42, gui: bool = False, target_name: str = "cube", stability_steps: int = 60, maximum_target_displacement_m: float = 0.001)`。
 - `run_truth_contact(config: TruthContactConfig) -> dict[str, object]`。
 
-- [ ] **步骤 1：写完整阶段 4 失败测试**
+- [x] **步骤 1：写完整阶段 4 失败测试**
 
 运行真实 runner 并断言：
 
@@ -147,7 +147,7 @@ assert summary["scientific_gate_passed"] is True
 非空且 link 集合等于两个手指；五张 PNG 为 640×480。metadata 中闭合、接触评价和目标接触为
 真，抬升和物理抓取为假。
 
-- [ ] **步骤 2：确认测试按预期失败**
+- [x] **步骤 2：确认测试按预期失败**
 
 ```bash
 /home/pzk/miniconda/envs/msc-grasp/bin/python -m pytest tests/simulation/test_pybullet_truth_contact.py -v
@@ -155,7 +155,7 @@ assert summary["scientific_gate_passed"] is True
 
 预期：因 `run_truth_contact` 不存在而导入失败。
 
-- [ ] **步骤 3：接入 CLOSE_CONTACT 阶段**
+- [x] **步骤 3：接入 CLOSE_CONTACT 阶段**
 
 将该阶段纳入与 OPEN_APPROACH 相同的双姿态预检和两段电机执行；approach
 全部动态门控通过后，继续在同一 scene/client 中以开放夹爪垂直下探到 cube
@@ -176,20 +176,20 @@ gripper = execute_gripper_close(
 )
 ```
 
-- [ ] **步骤 4：合并轨迹、事件和阶段门控**
+- [x] **步骤 4：合并轨迹、事件和阶段门控**
 
 扩展 `state_trace.csv` 字段以包含命令双指、左右接触和法向力；运动段填开放
 命令与零接触，闭合段写控制器实测值。`contact_events.csv` 写真实事件。
 summary 汇总闭合/保持步数、双指最终位置、各指最大法向力、cube 位移/高度
 变化和所有禁止碰撞。总门控要求阶段 3 门控与 `gripper.gate_passed` 同时为真。
 
-- [ ] **步骤 5：实现薄 runner 与边界 metadata**
+- [x] **步骤 5：实现薄 runner 与边界 metadata**
 
 runner 将配置转换为统一配置并调用 `CLOSE_CONTACT`。成功 metadata 设置
 `gripper_close_commanded/gripper_closed/contact_evaluated/target_contacted`
 为真，`object_lifted/physical_grasp_executed` 为假。
 
-- [ ] **步骤 6：运行阶段 2–4 回归和编译**
+- [x] **步骤 6：运行阶段 2–4 回归和编译**
 
 ```bash
 /home/pzk/miniconda/envs/msc-grasp/bin/python -m pytest tests/simulation/test_pybullet_truth_contact.py tests/simulation/test_pybullet_truth_approach.py tests/simulation/test_pybullet_truth_pregrasp.py tests/simulation/test_pybullet_gripper_control.py -v
