@@ -198,7 +198,7 @@ runner 将配置转换为统一配置并调用 `CLOSE_CONTACT`。成功 metadata
 
 预期：阶段 2–4 真实集成均通过，旧阶段边界不变。
 
-- [ ] **步骤 7：提交**
+- [x] **步骤 7：提交**
 
 ```bash
 git add src/simulation/pybullet/grasp_execution.py src/simulation/pybullet/run_truth_contact.py tests/simulation/test_pybullet_truth_contact.py
@@ -215,7 +215,7 @@ git commit -m "feat: execute bilateral cube contact stage"
 - 修改：`docs/worklog/WORKLOG.md`
 - 生成但不提交：`data/processed/pybullet/grasp_execution/stage_4_bilateral_contact/*`
 
-- [ ] **步骤 1：运行正式阶段 4 证据**
+- [x] **步骤 1：运行正式阶段 4 证据**
 
 ```bash
 /home/pzk/miniconda/envs/msc-grasp/bin/python -m src.simulation.pybullet.run_truth_contact
@@ -223,25 +223,25 @@ git commit -m "feat: execute bilateral cube contact stage"
 
 预期：`scientific_gate_passed` 为真；否则停止并进行系统化调试，不实现抬升。
 
-- [ ] **步骤 2：核验 JSON、CSV 与图像**
+- [x] **步骤 2：核验 JSON、CSV 与图像**
 
 检查 summary/metadata、轨迹 phase、左右手指 contact event、正有限法向力、
 五张 640×480 PNG。人工查看 grasp_depth 和 closed 图，确认双指先开放进入
 cube 两侧，再闭合接触，且 cube 仍在桌面上。
 
-- [ ] **步骤 3：更新中文记录**
+- [x] **步骤 3：更新中文记录**
 
 记录实际闭合/保持步数、首次双指接触步、末段连续接触、各指法向力、cube
 位移、碰撞和边界。下一步改为阶段 5 真值 cube 抬升与保持。
 
-- [ ] **步骤 4：运行完整回归和差异检查**
+- [x] **步骤 4：运行完整回归和差异检查**
 
 ```bash
 /home/pzk/miniconda/envs/msc-grasp/bin/python -m pytest -q
 git diff --check
 ```
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```bash
 git add src/simulation/pybullet/README.md docs/agent/PROJECT_STRUCTURE.md docs/agent/CURRENT_STATUS.md docs/agent/vlm_robotic_grasp_study_plan.md docs/worklog/WORKLOG.md
