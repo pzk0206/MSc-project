@@ -64,6 +64,7 @@ class MotionTraceRow:
     phase: str
     commanded_arm_positions: tuple[float, ...]
     actual_arm_positions: tuple[float, ...]
+    actual_finger_positions: tuple[float, float]
     actual_tool_position: tuple[float, float, float]
     actual_tool_quaternion_xyzw: tuple[float, float, float, float]
     maximum_joint_error_rad: float
@@ -245,6 +246,9 @@ def execute_joint_motion(
         actual = _joint_positions(
             robot_id, client_id, model.arm_joint_indices, physics
         )
+        fingers = _joint_positions(
+            robot_id, client_id, model.finger_joint_indices, physics
+        )
         link_state = physics.getLinkState(
             robot_id,
             model.tool_link_index,
@@ -269,7 +273,13 @@ def execute_joint_motion(
         global_minimum = min(global_minimum, minimum)
         total_environment_collisions += environment_count
         total_self_collisions += self_count
-        values = (*command, *actual, *tool_position, *tool_quaternion)
+        values = (
+            *command,
+            *actual,
+            *fingers,
+            *tool_position,
+            *tool_quaternion,
+        )
         row_finite = all(math.isfinite(value) for value in values)
         all_finite = all_finite and row_finite
         trace.append(
@@ -278,6 +288,7 @@ def execute_joint_motion(
                 phase=phase,
                 commanded_arm_positions=command,
                 actual_arm_positions=actual,
+                actual_finger_positions=(fingers[0], fingers[1]),
                 actual_tool_position=tool_position,
                 actual_tool_quaternion_xyzw=tool_quaternion,
                 maximum_joint_error_rad=float(maximum_error),

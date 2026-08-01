@@ -119,5 +119,10 @@ def test_real_motor_motion_reaches_a_safe_joint_target_and_returns() -> None:
         assert result.environment_collision_count == 0
         assert result.self_collision_count == 0
         assert result.all_states_finite
+        assert all(
+            row.actual_finger_positions
+            == pytest.approx((0.04, 0.04), abs=1e-3)
+            for row in result.trace
+        )
         assert max(abs(a - b) for a, b in zip(final, neutral)) <= 0.01
         assert fingers == pytest.approx((0.04, 0.04), abs=1e-3)

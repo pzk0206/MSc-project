@@ -158,6 +158,10 @@ def _trace_rows(
                     row.actual_arm_positions,
                     separators=(",", ":"),
                 ),
+                "actual_finger_positions": json.dumps(
+                    row.actual_finger_positions,
+                    separators=(",", ":"),
+                ),
                 "actual_tool_position": json.dumps(
                     row.actual_tool_position,
                     separators=(",", ":"),
@@ -183,6 +187,7 @@ def _write_trace(path: Path, rows: list[dict[str, object]]) -> None:
         "phase",
         "commanded_arm_positions",
         "actual_arm_positions",
+        "actual_finger_positions",
         "actual_tool_position",
         "actual_tool_quaternion_xyzw",
         "maximum_joint_error_rad",
@@ -219,6 +224,7 @@ def _save_preflight_failure(
         "preflight_clearance_passed": clearance_passed,
         "outbound_reached": False,
         "return_reached": False,
+        "maximum_finger_open_error_m": None,
         "executed_step_count": 0,
         "environment_collision_count": 0,
         "self_collision_count": 0,
@@ -383,6 +389,12 @@ def run_safe_motion_smoke(
     self_collision_count = (
         outbound.self_collision_count + returned.self_collision_count
     )
+    maximum_finger_open_error = max(
+        abs(value - 0.04)
+        for result in (outbound, returned)
+        for row in result.trace
+        for value in row.actual_finger_positions
+    )
     endpoint_gate = (
         waypoint_position_error <= POSITION_ERROR_THRESHOLD_M
         and waypoint_orientation_error
@@ -395,6 +407,7 @@ def run_safe_motion_smoke(
         and preflight_clearance.clearance_passed
         and outbound.gate_passed
         and returned.gate_passed
+        and maximum_finger_open_error <= 0.001
         and endpoint_gate
     )
     summary: dict[str, object] = {
@@ -406,6 +419,7 @@ def run_safe_motion_smoke(
         ),
         "outbound_reached": outbound_reached,
         "return_reached": return_reached,
+        "maximum_finger_open_error_m": maximum_finger_open_error,
         "waypoint_position_error_m": waypoint_position_error,
         "waypoint_orientation_error_degrees": waypoint_orientation_error,
         "return_position_error_m": return_position_error,
@@ -447,6 +461,7 @@ def run_safe_motion_smoke(
                 ORIENTATION_ERROR_THRESHOLD_DEGREES
             ),
             "joint_tolerance_rad": motion_config.joint_tolerance_rad,
+            "finger_open_error_m": 0.001,
             "collision_clearance_m": motion_config.clearance_m,
         },
         "summary": summary,

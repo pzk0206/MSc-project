@@ -43,6 +43,7 @@ def test_real_safe_motion_runner_writes_audited_round_trip(
     assert summary["preflight_clearance_passed"] is True
     assert summary["outbound_reached"] is True
     assert summary["return_reached"] is True
+    assert summary["maximum_finger_open_error_m"] <= 0.001
     assert summary["scientific_gate_passed"] is True
     assert len(trace) >= 480
     assert {row["phase"] for row in trace} == {"outbound", "return"}

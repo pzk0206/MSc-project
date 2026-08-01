@@ -41,7 +41,9 @@
 │           ├── backprojection.py
 │           ├── pose_generation.py
 │           ├── kinematic_audit.py
+│           ├── motion_control.py
 │           ├── run_pose_ik_study.py
+│           ├── run_safe_motion_smoke.py
 │           ├── target_selection.py
 │           ├── visualization.py
 │           ├── run_pilot.py
@@ -54,6 +56,8 @@
 │       ├── test_pybullet_pose_generation.py
 │       ├── test_pybullet_kinematic_audit.py
 │       ├── test_pybullet_pose_ik_runner.py
+│       ├── test_pybullet_motion_control.py
+│       ├── test_pybullet_safe_motion_runner.py
 │       ├── test_pybullet_perception.py
 │       ├── test_pybullet_smoke.py
 │       ├── test_pybullet_target_selection.py
@@ -131,7 +135,9 @@
 | `src/simulation/pybullet/backprojection.py` | 用米制深度和 PyBullet 相机矩阵将二维抓取中心恢复为相机/世界坐标，并以重投影、segmentation 和射线命中执行九点事后门控 |
 | `src/simulation/pybullet/pose_generation.py` | 将九点结果和二维方向转换为两个世界 -Z 俯视悬停姿态候选 |
 | `src/simulation/pybullet/kinematic_audit.py` | 按名称解析 Panda，并执行可恢复的离线 IK/FK、关节限位和静态碰撞余量审计 |
+| `src/simulation/pybullet/motion_control.py` | 用 Panda 位置电机执行命名关节轨迹，逐仿真步记录关节/FK、收敛和动态碰撞余量 |
 | `src/simulation/pybullet/run_pose_ik_study.py` | 独立读取九点产物，审计 18 个候选并保存 CSV/JSON；不执行电机、轨迹或夹爪 |
+| `src/simulation/pybullet/run_safe_motion_smoke.py` | 阶段 1 安全空中往返 runner；先静态预检，再执行电机并保存 CSV/JSON/关键帧，不靠近或抓取目标 |
 | `src/simulation/pybullet/target_selection.py` | 使用仿真真值框事后评价多物体 prompt 目标选择，不向模型注入 segmentation |
 | `src/simulation/pybullet/visualization.py` | 绘制定位框、目标选择真值、二维抓取框和深度/分割诊断图 |
 | `src/simulation/pybullet/run_pilot.py` | 编排第一阶段仿真感知 pilot、CLI、产物和失败元数据 |
@@ -180,7 +186,9 @@ PyBullet 场景
                                                            └── 世界坐标与九点审计
                                                                   └── 两个俯视悬停候选
                                                                          └── Panda IK/FK + 41 状态碰撞审计
-                                                                                └── data/processed/pybullet/
+                                                                                ├── data/processed/pybullet/
+                                                                                └── 阶段 1 电机安全空中往返
+                                                                                       └── grasp_execution/stage_1_safe_motion/
 ```
 
 `data/` 被 `.gitignore` 排除。源码和文档不得依赖已提交的生成结果。
