@@ -42,9 +42,11 @@
 │           ├── pose_generation.py
 │           ├── kinematic_audit.py
 │           ├── motion_control.py
+│           ├── grasp_execution.py
 │           ├── run_pose_ik_study.py
 │           ├── run_safe_motion_smoke.py
 │           ├── run_truth_pregrasp.py
+│           ├── run_truth_approach.py
 │           ├── target_selection.py
 │           ├── visualization.py
 │           ├── run_pilot.py
@@ -60,6 +62,7 @@
 │       ├── test_pybullet_motion_control.py
 │       ├── test_pybullet_safe_motion_runner.py
 │       ├── test_pybullet_truth_pregrasp.py
+│       ├── test_pybullet_truth_approach.py
 │       ├── test_pybullet_perception.py
 │       ├── test_pybullet_smoke.py
 │       ├── test_pybullet_target_selection.py
@@ -138,9 +141,11 @@
 | `src/simulation/pybullet/pose_generation.py` | 将九点结果和二维方向转换为两个世界 -Z 俯视悬停姿态候选，并支持从真值世界表面点直接生成同约定姿态 |
 | `src/simulation/pybullet/kinematic_audit.py` | 按名称解析 Panda，并执行可恢复的离线 IK/FK、关节限位和静态碰撞余量审计 |
 | `src/simulation/pybullet/motion_control.py` | 用 Panda 位置电机执行命名关节轨迹，逐仿真步记录关节/FK、收敛、动态碰撞余量及可选目标刚体真值位姿 |
+| `src/simulation/pybullet/grasp_execution.py` | 复用真值 cube 的场景准备、姿态预检、分段电机执行、目标稳定性门控及阶段证据写入 |
 | `src/simulation/pybullet/run_pose_ik_study.py` | 独立读取九点产物，审计 18 个候选并保存 CSV/JSON；不执行电机、轨迹或夹爪 |
 | `src/simulation/pybullet/run_safe_motion_smoke.py` | 阶段 1 安全空中往返 runner；先静态预检，再执行电机并保存 CSV/JSON/关键帧，不靠近或抓取目标 |
 | `src/simulation/pybullet/run_truth_pregrasp.py` | 阶段 2 真值方块上方到达 runner；检查目标稳定性并执行张开夹爪 pregrasp，逐步保存目标相对位姿，不下降或闭合 |
+| `src/simulation/pybullet/run_truth_approach.py` | 阶段 3 张开夹爪垂直接近 runner；先门控 pregrasp，再下降至 cube 顶面以上 0.02 m，不闭合或评价接触 |
 | `src/simulation/pybullet/target_selection.py` | 使用仿真真值框事后评价多物体 prompt 目标选择，不向模型注入 segmentation |
 | `src/simulation/pybullet/visualization.py` | 绘制定位框、目标选择真值、二维抓取框和深度/分割诊断图 |
 | `src/simulation/pybullet/run_pilot.py` | 编排第一阶段仿真感知 pilot、CLI、产物和失败元数据 |
@@ -194,6 +199,8 @@ PyBullet 场景
                                                                                        └── grasp_execution/stage_1_safe_motion/
                                                                                               └── 阶段 2 真值 cube 上方 pregrasp
                                                                                                      └── grasp_execution/stage_2_cube_pregrasp/
+                                                                                                            └── 阶段 3 张开夹爪垂直接近
+                                                                                                                   └── grasp_execution/stage_3_open_approach/
 ```
 
 `data/` 被 `.gitignore` 排除。源码和文档不得依赖已提交的生成结果。
@@ -278,6 +285,10 @@ conda run -n msc-grasp python \
 # 阶段 2：使用真值方块移动到目标上方，夹爪保持张开
 conda run -n msc-grasp python \
   src/simulation/pybullet/run_truth_pregrasp.py
+
+# 阶段 3：张开夹爪从 pregrasp 垂直接近接触前高度
+conda run -n msc-grasp python \
+  src/simulation/pybullet/run_truth_approach.py
 
 # 运行全部测试；使用 python -m pytest 保证仓库根目录可导入
 conda run -n msc-grasp python -m pytest -q
