@@ -43,6 +43,7 @@ def test_real_truth_pregrasp_reaches_stable_cube_with_open_fingers(
 
     required = (
         "state_trace.csv",
+        "contact_events.csv",
         "summary.json",
         "metadata.json",
         "start.png",
@@ -57,6 +58,10 @@ def test_real_truth_pregrasp_reaches_stable_cube_with_open_fingers(
     metadata = json.loads(
         (tmp_path / "metadata.json").read_text(encoding="utf-8")
     )
+
+    assert (tmp_path / "contact_events.csv").read_text(
+        encoding="utf-8"
+    ) == "step,phase,robot_link,target_body,normal_force\n"
 
     assert summary["stage"] == "cube_truth_pregrasp"
     assert summary["target_stability_preflight_passed"] is True
