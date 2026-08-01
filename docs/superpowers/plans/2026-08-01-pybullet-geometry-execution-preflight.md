@@ -280,7 +280,7 @@ git commit -m "feat: preflight geometry grasp execution plan"
 - 修改：本实施计划复选框
 - 生成但不提交：`data/processed/pybullet/grasp_execution/stage_6a_geometry_preflight/*`
 
-- [ ] **步骤 1：运行正式真实模型证据**
+- [x] **步骤 1：运行正式真实模型证据**
 
 ```bash
 /home/pzk/miniconda/envs/msc-grasp/bin/python -m \
@@ -290,19 +290,19 @@ git commit -m "feat: preflight geometry grasp execution plan"
 若沙箱隐藏 GPU，使用同一命令的受控外部执行权限；不得改为 CPU 后称正式 VLM
 证据。若真实检测、反投影或静态预检失败，保存失败并停止，不开始 Stage 6B。
 
-- [ ] **步骤 2：核验产物与图像**
+- [x] **步骤 2：核验产物与图像**
 
 独立读取 summary、metadata、candidate CSV 和计划，核对 RGB 哈希、同一场景、
 零 capture 后 step、两个候选、唯一选择、每候选 82 状态、目标/射线审计和全部非执行
 标志。人工查看 localization/geometry prediction 是否确实位于红色方块。
 
-- [ ] **步骤 3：更新中文记录**
+- [x] **步骤 3：更新中文记录**
 
 只记录真实正式输出：检测框/分数/IoU、geometry 参数、世界点、选中对称角、
 IK/FK 误差、最小余量及总门控。明确 Stage 6A 尚未运动或抓取，下一步仅为
 Stage 6B 消费冻结计划。
 
-- [ ] **步骤 4：运行完整验证**
+- [x] **步骤 4：运行完整验证**
 
 ```bash
 /home/pzk/miniconda/envs/msc-grasp/bin/python -m pytest -q
@@ -312,7 +312,7 @@ Stage 6B 消费冻结计划。
 git diff --check
 ```
 
-- [ ] **步骤 5：提交中文证据记录**
+- [x] **步骤 5：提交中文证据记录**
 
 ```bash
 git add src/simulation/pybullet/README.md docs/agent/PROJECT_STRUCTURE.md \

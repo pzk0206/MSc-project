@@ -7,7 +7,7 @@
 [Bullet Physics / PyBullet 官方项目](https://github.com/bulletphysics/bullet3)
 及其随包资源。这里没有复制或改编外部抓取执行代码。
 
-## 八种运行方式
+## 九种运行方式
 
 单物体感知诊断：
 
@@ -110,6 +110,28 @@ conda run -n msc-grasp python \
 最大末端—cube 相对漂移为 `0.001410 m`。closed、lifted、lift-hold 图已人工
 确认方块被双指夹持、离桌并保持。该结果是一例真值姿态仿真抓取成功，不是
 geometry 或 CNN 感知后端成功率。
+
+Stage 6A VLM + geometry 同场景执行计划预检：
+
+```bash
+conda run -n msc-grasp python \
+  src/simulation/pybullet/run_geometry_execution_preflight.py \
+  --device cuda \
+  --output-dir \
+  data/processed/pybullet/grasp_execution/stage_6a_geometry_preflight
+```
+
+该命令在同一个固定场景中采集一次 RGB、深度和 segmentation，实时运行
+`red cube` Grounding DINO 定位和 geometry 后端，再将二维中心反投影为世界
+表面点。segmentation 和射线只作预测后的目标审计，不修正中心或角度。两个
+`0°/180°` 候选各执行两组静态安全检查：接触前 41 状态包含 cube，抓取深度
+41 状态只排除预期目标 cube；桌面、鸭、球和自碰撞继续检查。
+
+2026-08-01 的正式 CUDA 运行中，定位框为 `[297,189,344,245]`、分数
+`0.8170`、cube IoU `0.8717`；geometry 中心为 `(320.5,217.0)`、角度 `0°`。
+两个候选均通过各 82 状态门控，确定性选择 `0°`，并写出严格校验的
+`execution_plan.json`。该阶段没有电机、闭合、接触或抬升，只能称为“几何
+感知执行计划通过静态预检”，不能称为仿真抓取成功。
 
 上述静态审计命令为每条二维抓取生成 `0°/180°` 两个世界 `-Z` 俯视候选，检查 Panda
 七关节 IK、`5 mm/5°` FK 误差和 `2 mm` 碰撞余量。两段关节插值各采样
@@ -239,6 +261,8 @@ backend_comparison.png
 本模块已经实现二维抓取中心反投影、确定性六自由度悬停姿态、离线 IK/FK、
 离散碰撞余量审计、阶段 1 安全空中电机往返、阶段 2 真值方块上方 pregrasp，
 阶段 3 张开夹爪的接触前垂直接近、阶段 4 的开放夹爪短下探与双指接触，以及
-阶段 5 的真值方块抬升和保持。阶段 1--5 已支持一例真值姿态仿真抓取成功判定，
-但尚未把 geometry 或多头 CNN 的感知预测接入这条控制链，也没有后端仿真抓取
-成功率。后续比较必须冻结当前控制和门控，只替换感知后端输入。
+阶段 5 的真值方块抬升和保持，以及 Stage 6A 的 VLM + geometry 同场景感知、
+反投影与静态执行计划预检。阶段 1--5 已支持一例真值姿态仿真抓取成功判定，
+Stage 6A 只生成计划、尚未驱动机械臂；多头 CNN 也尚未接入。因此当前仍没有
+感知后端仿真抓取成功率。后续 Stage 6B 必须加载并复核冻结计划，再复用当前
+控制和物理门控。

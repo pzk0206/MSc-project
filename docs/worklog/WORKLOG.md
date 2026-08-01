@@ -2,6 +2,28 @@
 
 本文是回顾已完成项目工作的入口。详细内容保留在按日期命名的周报中。
 
+## 2026-08-01 — PyBullet Stage 6A 几何感知执行计划预检
+
+- 将候选 IK/FK、41 状态碰撞和确定性选择从离线研究 runner 提升为共享接口；
+  新增严格 `execution_plan.py`，篡改 backend、seed、候选、IK、位姿高度或
+  非有限值时拒绝加载。
+- 新增同场景 runner：固定场景稳定 60 步后只采集一次图像，实时运行
+  Grounding DINO `red cube` 与 geometry，随后进行深度反投影和两个对称姿态
+  审计；拍摄后不再 step，也不调用电机。
+- 首次真实静态诊断发现 geometry 世界中心偏移使 `0.005 m` 抓取深度对 cube
+  产生约 `-2.74 mm` 的预期目标接触。没有降低 2 mm 门槛，而是分成两组检查：
+  接触前 41 状态继续包含 cube，抓取深度 41 状态只排除预期 cube，其他环境与
+  自碰撞保持严格门控。
+- 正式 CUDA 结果：定位框 `[297,189,344,245]`、分数 `0.8170`、cube IoU
+  `0.8717`；geometry 中心 `(320.5,217.0)`、角度 `0°`，反投影世界点
+  `(0.506456,0.002225,0.675478) m`。两个候选均通过 82 状态门控，选择 `0°`。
+- RGB 哈希、候选 CSV、summary、metadata 和冻结 `execution_plan.json` 保存至
+  `data/processed/pybullet/grasp_execution/stage_6a_geometry_preflight/`；两张
+  图已人工确认定位/中心正确，geometry 框宽于物体的真实特征被保留。本阶段
+  全部运动和抓取标志为假，不能称为仿真抓取成功。
+- 新增 20 项共享审计、计划契约、真实同场景和失败保真测试，simulation 共
+  `135` 项；完整项目回归为 `167 passed`，Python 编译和差异检查通过。
+
 ## 2026-08-01 — PyBullet 阶段 5 真值方块抬升与保持
 
 - 新增 `lift_control.py`，冻结阶段 4 的最终双指命令，使 Panda 手臂沿世界 Z
