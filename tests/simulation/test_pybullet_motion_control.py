@@ -1,4 +1,5 @@
 from dataclasses import replace
+import math
 
 import pybullet as p
 import pytest
@@ -83,6 +84,7 @@ def test_real_motor_motion_reaches_a_safe_joint_target_and_returns() -> None:
                 *scene.object_body_ids.values(),
             ),
             allowed_environment_link_pairs=((-1, scene.bodies.table),),
+            tracked_body_ids=(scene.object_body_ids["cube"],),
             config=config,
         )
 
@@ -122,6 +124,22 @@ def test_real_motor_motion_reaches_a_safe_joint_target_and_returns() -> None:
         assert all(
             row.actual_finger_positions
             == pytest.approx((0.04, 0.04), abs=1e-3)
+            for row in result.trace
+        )
+        assert all(len(row.tracked_body_poses) == 1 for row in result.trace)
+        assert all(
+            row.tracked_body_poses[0].body_id
+            == scene.object_body_ids["cube"]
+            for row in result.trace
+        )
+        assert all(
+            all(
+                math.isfinite(value)
+                for value in (
+                    *row.tracked_body_poses[0].position,
+                    *row.tracked_body_poses[0].quaternion_xyzw,
+                )
+            )
             for row in result.trace
         )
         assert max(abs(a - b) for a, b in zip(final, neutral)) <= 0.01

@@ -57,6 +57,15 @@ class MotionSegment:
 
 
 @dataclass(frozen=True)
+class TrackedBodyPose:
+    """Measured world pose of one optionally tracked rigid body."""
+
+    body_id: int
+    position: tuple[float, float, float]
+    quaternion_xyzw: tuple[float, float, float, float]
+
+
+@dataclass(frozen=True)
 class MotionTraceRow:
     """Measured state after one real simulation step."""
 
@@ -71,6 +80,7 @@ class MotionTraceRow:
     minimum_clearance_m: float
     environment_collision_count: int
     self_collision_count: int
+    tracked_body_poses: tuple[TrackedBodyPose, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -191,6 +201,7 @@ def execute_joint_motion(
     segments: Sequence[MotionSegment],
     environment_body_ids: Sequence[int],
     allowed_environment_link_pairs: Sequence[tuple[int, int]] = (),
+    tracked_body_ids: Sequence[int] = (),
     config: MotionConfig = MotionConfig(),
     physics: Any = p,
 ) -> MotionExecutionResult:
@@ -257,6 +268,20 @@ def execute_joint_motion(
         )
         tool_position = tuple(float(value) for value in link_state[4])
         tool_quaternion = tuple(float(value) for value in link_state[5])
+        tracked_poses = tuple(
+            TrackedBodyPose(
+                body_id=int(body_id),
+                position=tuple(float(value) for value in pose[0]),
+                quaternion_xyzw=tuple(float(value) for value in pose[1]),
+            )
+            for body_id in tracked_body_ids
+            for pose in (
+                physics.getBasePositionAndOrientation(
+                    int(body_id),
+                    physicsClientId=client_id,
+                ),
+            )
+        )
         maximum_error = max(
             abs(actual_value - command_value)
             for actual_value, command_value in zip(actual, command)
@@ -279,6 +304,14 @@ def execute_joint_motion(
             *fingers,
             *tool_position,
             *tool_quaternion,
+            *(
+                value
+                for tracked_pose in tracked_poses
+                for value in (
+                    *tracked_pose.position,
+                    *tracked_pose.quaternion_xyzw,
+                )
+            ),
         )
         row_finite = all(math.isfinite(value) for value in values)
         all_finite = all_finite and row_finite
@@ -295,6 +328,7 @@ def execute_joint_motion(
                 minimum_clearance_m=float(minimum),
                 environment_collision_count=environment_count,
                 self_collision_count=self_count,
+                tracked_body_poses=tracked_poses,
             )
         )
         return actual
