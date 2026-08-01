@@ -37,14 +37,14 @@
 - 新建：`tests/simulation/test_pybullet_lift_control.py`
 
 **接口：**
-- `LiftConfig(lift_steps: int = 240, hold_steps: int = 240, tool_lift_command_m: float = 0.12, minimum_object_lift_m: float = 0.10, maximum_hold_relative_drift_m: float = 0.01, minimum_trailing_bilateral_contact_steps: int = 120, arm_joint_tolerance_rad: float = 0.01)`。
+- `LiftConfig(lift_steps: int = 240, settle_steps: int = 240, hold_steps: int = 240, tool_lift_command_m: float = 0.12, minimum_object_lift_m: float = 0.10, maximum_hold_relative_drift_m: float = 0.01, minimum_trailing_bilateral_contact_steps: int = 120, arm_joint_tolerance_rad: float = 0.01)`。
 - `LiftTraceRow`：step/phase、命令/实测臂和双指、工具/cube 位姿、cube 上升量、相对向量/漂移、左右接触/力、cube--table 接触及禁止碰撞。
 - `LiftResult`：完整 trace/events、到达、末段高度/离桌/漂移/双指保持、最大误差/碰撞、有限性和 gate。
 - `execute_object_lift(*, robot_id, target_body_id, table_body_id, client_id, model, lift_arm_positions, lift_target_pose, frozen_finger_positions, reference_target_position, reference_tool_relative_to_target, environment_body_ids, allowed_environment_link_pairs=(), config=LiftConfig(), physics=p) -> LiftResult`。
 
-- [ ] **步骤 1：写配置与真实抬升失败测试**
+- [x] **步骤 1：写配置与真实抬升失败测试**
 
-配置测试拒绝零抬升步、非正保持步、非正抬升命令、cube 门槛不小于工具命令、
+配置测试拒绝零抬升步、负 settle、非正保持步、非正抬升命令、cube 门槛不小于工具命令、
 非正漂移门槛、双指保持要求大于保持步和非正关节容差；执行入口另拒绝越出
 `[0.0, 0.04] m` 的冻结双指命令。
 
@@ -80,7 +80,7 @@ assert result.trailing_bilateral_contact_steps >= 120
 assert result.gate_passed is True
 ```
 
-- [ ] **步骤 2：确认测试按预期失败**
+- [x] **步骤 2：确认测试按预期失败**
 
 运行：
 
@@ -90,19 +90,21 @@ assert result.gate_passed is True
 
 预期：因 `lift_control` 模块不存在而导入失败。
 
-- [ ] **步骤 3：实现配置、采样和安全分类**
+- [x] **步骤 3：实现配置、采样和安全分类**
 
 每步分别查询 robot--cube、cube--table、robot--其他环境和 robot--robot 接触。
 只有精确 finger link 且有限正法向力计为目标接触；robot 非手指--cube 穿透、
 除底座安装豁免外的环境接触和去除相邻 link 后的自碰撞均计为禁止事件。
 
-- [ ] **步骤 4：实现抬升、保持和门控**
+- [x] **步骤 4：实现抬升、保持和门控**
 
 从真实当前七关节状态线性插值到 `lift_arm_positions`，每步同时发送固定双指
-命令。抬升 240 步后保持目标 240 步；不因接触丢失提前停止。最后 240 行分别
+命令。抬升 240 步后最多使用 240 个同属 `lift` 的 settle 步达到原有
+`0.01 rad` 终点门槛，再保持目标 240 个完整 `lift_hold` 步；不因接触丢失
+提前停止。最后 240 行分别
 检查 cube 上升量、table contact 和相对漂移，另从 trace 尾部计算连续双指接触。
 
-- [ ] **步骤 5：运行定向测试和编译**
+- [x] **步骤 5：运行定向测试和编译**
 
 ```bash
 /home/pzk/miniconda/envs/msc-grasp/bin/python -m pytest tests/simulation/test_pybullet_lift_control.py -v
