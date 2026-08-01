@@ -194,7 +194,7 @@ events 并给出全局 step。保存 lifted（抬升段结束）和 lift_hold（
 git diff --check
 ```
 
-- [ ] **步骤 7：提交**
+- [x] **步骤 7：提交**
 
 ```bash
 git add src/simulation/pybullet/grasp_execution.py \
@@ -213,7 +213,7 @@ git commit -m "feat: execute truth cube lift stage"
 - 修改：`docs/worklog/WORKLOG.md`
 - 生成但不提交：`data/processed/pybullet/grasp_execution/stage_5_truth_cube_lift/*`
 
-- [ ] **步骤 1：运行正式阶段 5 证据**
+- [x] **步骤 1：运行正式阶段 5 证据**
 
 ```bash
 /home/pzk/miniconda/envs/msc-grasp/bin/python -m src.simulation.pybullet.run_truth_lift
@@ -222,25 +222,25 @@ git commit -m "feat: execute truth cube lift stage"
 预期：`physical_grasp_success` 和 `scientific_gate_passed` 均为真；否则停止并使用
 系统化调试，不接入感知后端。
 
-- [ ] **步骤 2：核验 JSON、CSV 与图像**
+- [x] **步骤 2：核验 JSON、CSV 与图像**
 
 检查七种 phase、最后 240 个 hold 状态、cube 高度、table contact、相对漂移、
 双指正法向力、零禁止碰撞和七张 640×480 PNG。人工查看 closed、lifted 和
 lift_hold，确认方块离开桌面并持续位于双指之间。
 
-- [ ] **步骤 3：更新中文记录**
+- [x] **步骤 3：更新中文记录**
 
 记录实际抬升/保持步数、cube 最小/最终上升量、桌面解除、相对漂移、双指保持、
 碰撞和边界。下一步改为冻结阶段 1--5 控制链并设计几何/多头感知后端公平 pilot。
 
-- [ ] **步骤 4：运行完整回归和差异检查**
+- [x] **步骤 4：运行完整回归和差异检查**
 
 ```bash
 /home/pzk/miniconda/envs/msc-grasp/bin/python -m pytest -q
 git diff --check
 ```
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```bash
 git add src/simulation/pybullet/README.md docs/agent/PROJECT_STRUCTURE.md \

@@ -43,12 +43,14 @@
 │           ├── kinematic_audit.py
 │           ├── motion_control.py
 │           ├── gripper_control.py
+│           ├── lift_control.py
 │           ├── grasp_execution.py
 │           ├── run_pose_ik_study.py
 │           ├── run_safe_motion_smoke.py
 │           ├── run_truth_pregrasp.py
 │           ├── run_truth_approach.py
 │           ├── run_truth_contact.py
+│           ├── run_truth_lift.py
 │           ├── target_selection.py
 │           ├── visualization.py
 │           ├── run_pilot.py
@@ -67,6 +69,8 @@
 │       ├── test_pybullet_truth_approach.py
 │       ├── test_pybullet_gripper_control.py
 │       ├── test_pybullet_truth_contact.py
+│       ├── test_pybullet_lift_control.py
+│       ├── test_pybullet_truth_lift.py
 │       ├── test_pybullet_perception.py
 │       ├── test_pybullet_smoke.py
 │       ├── test_pybullet_target_selection.py
@@ -146,12 +150,14 @@
 | `src/simulation/pybullet/kinematic_audit.py` | 按名称解析 Panda，并执行可恢复的离线 IK/FK、关节限位和静态碰撞余量审计 |
 | `src/simulation/pybullet/motion_control.py` | 用 Panda 位置电机执行命名关节轨迹，逐仿真步记录关节/FK、收敛、动态碰撞余量及可选目标刚体真值位姿 |
 | `src/simulation/pybullet/gripper_control.py` | 保持 Panda 手臂并缓慢闭合双指，以真实 body/link/正法向力分类目标接触，取得双指接触后冻结命令并持续审计 |
-| `src/simulation/pybullet/grasp_execution.py` | 复用真值 cube 的场景准备、姿态预检、分段电机执行、目标稳定性、抓取深度和双指接触门控及阶段证据写入 |
+| `src/simulation/pybullet/lift_control.py` | 冻结双指命令并执行手臂抬升/保持，逐步审计 cube 上升量、桌面接触、工具相对漂移、双指接触和禁止碰撞 |
+| `src/simulation/pybullet/grasp_execution.py` | 复用真值 cube 的场景准备、姿态预检、分段电机执行、目标稳定性、抓取深度、双指接触与抬升保持门控及阶段证据写入 |
 | `src/simulation/pybullet/run_pose_ik_study.py` | 独立读取九点产物，审计 18 个候选并保存 CSV/JSON；不执行电机、轨迹或夹爪 |
 | `src/simulation/pybullet/run_safe_motion_smoke.py` | 阶段 1 安全空中往返 runner；先静态预检，再执行电机并保存 CSV/JSON/关键帧，不靠近或抓取目标 |
 | `src/simulation/pybullet/run_truth_pregrasp.py` | 阶段 2 真值方块上方到达 runner；检查目标稳定性并执行张开夹爪 pregrasp，逐步保存目标相对位姿，不下降或闭合 |
 | `src/simulation/pybullet/run_truth_approach.py` | 阶段 3 张开夹爪垂直接近 runner；先门控 pregrasp，再下降至 cube 顶面以上 0.02 m，不闭合或评价接触 |
 | `src/simulation/pybullet/run_truth_contact.py` | 阶段 4 真值方块接触 runner；从 0.02 m 接触前高度张开下探至 0.005 m，再闭合并保持双指目标接触，不抬升 |
+| `src/simulation/pybullet/run_truth_lift.py` | 阶段 5 真值方块抬升 runner；重放阶段 2--4 后冻结夹爪，垂直抬升 cube 并保持 240 步，保存完整物理抓取证据 |
 | `src/simulation/pybullet/target_selection.py` | 使用仿真真值框事后评价多物体 prompt 目标选择，不向模型注入 segmentation |
 | `src/simulation/pybullet/visualization.py` | 绘制定位框、目标选择真值、二维抓取框和深度/分割诊断图 |
 | `src/simulation/pybullet/run_pilot.py` | 编排第一阶段仿真感知 pilot、CLI、产物和失败元数据 |
@@ -301,6 +307,10 @@ conda run -n msc-grasp python \
 # 阶段 4：张开下探到抓取深度，再闭合并保持双指目标接触
 conda run -n msc-grasp python \
   src/simulation/pybullet/run_truth_contact.py
+
+# 阶段 5：冻结双指命令，垂直抬升真值方块并保持
+conda run -n msc-grasp python \
+  src/simulation/pybullet/run_truth_lift.py
 
 # 运行全部测试；使用 python -m pytest 保证仓库根目录可导入
 conda run -n msc-grasp python -m pytest -q
