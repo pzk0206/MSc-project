@@ -308,10 +308,13 @@ def execute_joint_motion(
             command_values = start + fraction * (target - start)
             command = tuple(float(value) for value in command_values)
             actual = command_and_sample(segment.name, command)
-        reached = max(
-            abs(actual_value - target_value)
-            for actual_value, target_value in zip(actual, target)
-        ) <= config.joint_tolerance_rad
+        reached = bool(
+            max(
+                abs(actual_value - target_value)
+                for actual_value, target_value in zip(actual, target)
+            )
+            <= config.joint_tolerance_rad
+        )
         for _ in range(config.settle_steps):
             if reached:
                 break
@@ -319,10 +322,13 @@ def execute_joint_motion(
                 segment.name,
                 tuple(float(value) for value in target),
             )
-            reached = max(
-                abs(actual_value - target_value)
-                for actual_value, target_value in zip(actual, target)
-            ) <= config.joint_tolerance_rad
+            reached = bool(
+                max(
+                    abs(actual_value - target_value)
+                    for actual_value, target_value in zip(actual, target)
+                )
+                <= config.joint_tolerance_rad
+            )
         reached_rows.append((segment.name, reached))
 
     failures = []

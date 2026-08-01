@@ -34,7 +34,22 @@ conda run -n msc-grasp python \
   --output-dir data/processed/pybullet/multi_object_study
 ```
 
-该命令为每条二维抓取生成 `0°/180°` 两个世界 `-Z` 俯视候选，检查 Panda
+分阶段物理执行的阶段 1 安全空中运动冒烟：
+
+```bash
+conda run -n msc-grasp python \
+  src/simulation/pybullet/run_safe_motion_smoke.py \
+  --output-dir \
+  data/processed/pybullet/grasp_execution/stage_1_safe_motion
+```
+
+该命令先用静态 IK/FK 和 `2 mm` 碰撞余量预检一个比中立末端高 `0.05 m`
+的安全空中点，只有预检通过才通过 Panda 位置电机执行“中立位→安全点→中立
+位”。执行中逐步调用 `stepSimulation`，手指保持 `0.04 m` 张开，并保存状态
+轨迹、碰撞统计、summary、metadata 和三个关键帧。该阶段不靠近目标、不闭合
+夹爪、不评价接触或抬升，因此不能称为仿真抓取。
+
+上述静态审计命令为每条二维抓取生成 `0°/180°` 两个世界 `-Z` 俯视候选，检查 Panda
 七关节 IK、`5 mm/5°` FK 误差和 `2 mm` 碰撞余量。两段关节插值各采样
 21 个状态，共 41 个唯一状态；状态只通过 DIRECT 中的 `resetJointState`
 静态检查，不调用电机控制、不执行轨迹、不闭合夹爪。

@@ -112,6 +112,9 @@ def test_real_motor_motion_reaches_a_safe_joint_target_and_returns() -> None:
             "outbound": True,
             "return": True,
         }
+        assert all(
+            type(reached) is bool for _, reached in result.segment_reached
+        )
         assert len(result.trace) >= 2 * config.steps_per_segment
         assert result.environment_collision_count == 0
         assert result.self_collision_count == 0
