@@ -1,6 +1,8 @@
 import hashlib
 import json
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
@@ -15,9 +17,12 @@ from src.simulation.pybullet.execution_plan import (
 )
 from src.simulation.pybullet.pose_generation import ToolPose
 from src.simulation.pybullet.run_center_bias_diagnostic import (
+    DEFAULT_OUTPUT_DIR,
+    DEFAULT_SOURCE_DIR,
     CenterBiasDiagnosticConfig,
     run_center_bias_diagnostic,
 )
+import src.simulation.pybullet.run_center_bias_diagnostic as runner_module
 
 
 WORLD_POINT = (
@@ -280,4 +285,133 @@ def test_offline_runner_rejects_unknown_evidence_role(tmp_path: Path) -> None:
             tmp_path / "source",
             tmp_path / "output",
             evidence_role="replacement",
+        )
+
+
+@pytest.mark.parametrize(
+    ("source_dir", "output_dir", "evidence_role"),
+    [
+        (DEFAULT_SOURCE_DIR, Path("/tmp/stage6a1-repro"), "reproducibility"),
+        (Path("/tmp/stage6a-repro"), DEFAULT_OUTPUT_DIR, "reproducibility"),
+        (
+            Path(
+                "data/processed/pybullet/grasp_execution/"
+                "stage_6a_geometry_preflight_reproducibility"
+            ),
+            Path("/tmp/stage6a1-formal"),
+            "formal",
+        ),
+        (
+            Path("/tmp/stage6a-formal"),
+            Path(
+                "data/processed/pybullet/grasp_execution/"
+                "stage_6a1_center_bias_reproducibility"
+            ),
+            "formal",
+        ),
+    ],
+)
+def test_config_enforces_canonical_evidence_role_isolation(
+    source_dir: Path,
+    output_dir: Path,
+    evidence_role: str,
+) -> None:
+    with pytest.raises(ValueError, match="evidence_role"):
+        CenterBiasDiagnosticConfig(
+            source_dir,
+            output_dir,
+            evidence_role=evidence_role,
+        )
+
+
+def test_config_does_not_relabel_existing_output_evidence(
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    original_metadata = {
+        "protocol": "stage_6a1_center_bias_diagnostic_v1",
+        "evidence_role": "formal",
+        "status": "success",
+    }
+    metadata_path = output_dir / "metadata.json"
+    metadata_path.write_text(json.dumps(original_metadata), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="existing evidence_role"):
+        CenterBiasDiagnosticConfig(
+            tmp_path / "source",
+            output_dir,
+            evidence_role="reproducibility",
+        )
+
+    assert json.loads(metadata_path.read_text(encoding="utf-8")) == (
+        original_metadata
+    )
+
+
+def test_cli_returns_nonzero_for_failed_audit(tmp_path: Path) -> None:
+    output_dir = tmp_path / "output"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "src.simulation.pybullet.run_center_bias_diagnostic",
+            "--source-dir",
+            str(tmp_path / "missing"),
+            "--output-dir",
+            str(output_dir),
+        ],
+        cwd=Path(__file__).resolve().parents[2],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 1
+    assert json.loads(
+        (output_dir / "metadata.json").read_text(encoding="utf-8")
+    )["status"] == "failure"
+
+
+def test_publication_failure_removes_partial_success_and_writes_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_dir, output_dir = _write_stage_6a_fixture(tmp_path)
+
+    def fail_csv(*args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(runner_module, "write_diagnostic_csv", fail_csv)
+    result = run_center_bias_diagnostic(
+        CenterBiasDiagnosticConfig(source_dir, output_dir)
+    )
+
+    assert result["status"] == "failure"
+    assert result["failure_stage"] == "output_publication"
+    assert not (output_dir / "center_bias_diagnostic.json").exists()
+    assert not (output_dir / "center_bias_diagnostic.csv").exists()
+    assert json.loads(
+        (output_dir / "metadata.json").read_text(encoding="utf-8")
+    )["status"] == "failure"
+
+
+def test_runner_does_not_convert_unexpected_programming_error_to_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_dir, output_dir = _write_stage_6a_fixture(tmp_path)
+
+    def unexpected_bug(*args, **kwargs):
+        raise RuntimeError("unexpected bug")
+
+    monkeypatch.setattr(
+        runner_module,
+        "compute_center_bias",
+        unexpected_bug,
+    )
+
+    with pytest.raises(RuntimeError, match="unexpected bug"):
+        run_center_bias_diagnostic(
+            CenterBiasDiagnosticConfig(source_dir, output_dir)
         )

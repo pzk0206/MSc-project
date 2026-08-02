@@ -12,12 +12,14 @@ from typing import Mapping, Sequence
 
 from src.simulation.pybullet.center_bias_diagnostic import (
     PROTOCOL_VERSION,
+    CenterBiasMeasurement,
     compute_center_bias,
     write_diagnostic_csv,
     write_diagnostic_json,
 )
 from src.simulation.pybullet.execution_plan import (
     PROTOCOL_VERSION as STAGE_6A_PROTOCOL_VERSION,
+    GeometryExecutionPlan,
     load_geometry_execution_plan,
 )
 
@@ -28,6 +30,14 @@ DEFAULT_SOURCE_DIR = Path(
 DEFAULT_OUTPUT_DIR = Path(
     "data/processed/pybullet/grasp_execution/"
     "stage_6a1_center_bias_diagnostic"
+)
+REPRODUCIBILITY_SOURCE_DIR = Path(
+    "data/processed/pybullet/grasp_execution/"
+    "stage_6a_geometry_preflight_reproducibility"
+)
+REPRODUCIBILITY_OUTPUT_DIR = Path(
+    "data/processed/pybullet/grasp_execution/"
+    "stage_6a1_center_bias_reproducibility"
 )
 SOURCE_FILENAMES = (
     "summary.json",
@@ -68,6 +78,40 @@ class CenterBiasDiagnosticConfig:
             raise ValueError(
                 "evidence_role must be formal or reproducibility"
             )
+        formal_source = DEFAULT_SOURCE_DIR.resolve()
+        formal_output = DEFAULT_OUTPUT_DIR.resolve()
+        reproducibility_source = REPRODUCIBILITY_SOURCE_DIR.resolve()
+        reproducibility_output = REPRODUCIBILITY_OUTPUT_DIR.resolve()
+        if self.evidence_role == "formal" and (
+            source == reproducibility_source
+            or output == reproducibility_output
+        ):
+            raise ValueError(
+                "formal evidence_role cannot use reproducibility directories"
+            )
+        if self.evidence_role == "reproducibility" and (
+            source == formal_source or output == formal_output
+        ):
+            raise ValueError(
+                "reproducibility evidence_role cannot use formal directories"
+            )
+        existing_metadata = output / "metadata.json"
+        if existing_metadata.is_file():
+            try:
+                existing = json.loads(
+                    existing_metadata.read_text(encoding="utf-8")
+                )
+            except (json.JSONDecodeError, OSError) as exc:
+                raise ValueError(
+                    "existing Stage 6A.1 metadata is invalid"
+                ) from exc
+            if not isinstance(existing, dict):
+                raise ValueError("existing Stage 6A.1 metadata is invalid")
+            existing_role = existing.get("evidence_role")
+            if existing_role != self.evidence_role:
+                raise ValueError(
+                    "existing evidence_role does not match requested role"
+                )
         object.__setattr__(self, "source_dir", source)
         object.__setattr__(self, "output_dir", output)
 
@@ -125,7 +169,7 @@ def _validate_source_evidence(
     source_dir: Path,
     summary: Mapping[str, object],
     metadata: Mapping[str, object],
-    plan,
+    plan: GeometryExecutionPlan,
 ) -> tuple[tuple[float, float, float], bool]:
     _expect_equal(summary.get("protocol"), STAGE_6A_PROTOCOL_VERSION, "protocol")
     _expect_equal(metadata.get("protocol"), STAGE_6A_PROTOCOL_VERSION, "protocol")
@@ -207,10 +251,39 @@ def _cleanup_outputs(output_dir: Path) -> None:
         "center_bias_diagnostic.json",
         "center_bias_diagnostic.csv",
         "metadata.json",
+        ".center_bias_diagnostic.json.tmp",
+        ".center_bias_diagnostic.csv.tmp",
+        ".metadata.json.tmp",
     ):
         path = output_dir / name
         if path.exists():
             path.unlink()
+
+
+def _publish_success(
+    output_dir: Path,
+    payload: Mapping[str, object],
+    measurement: CenterBiasMeasurement,
+) -> None:
+    temporary_and_final = (
+        (
+            output_dir / ".center_bias_diagnostic.json.tmp",
+            output_dir / "center_bias_diagnostic.json",
+        ),
+        (
+            output_dir / ".center_bias_diagnostic.csv.tmp",
+            output_dir / "center_bias_diagnostic.csv",
+        ),
+        (
+            output_dir / ".metadata.json.tmp",
+            output_dir / "metadata.json",
+        ),
+    )
+    write_diagnostic_json(temporary_and_final[0][0], payload)
+    write_diagnostic_csv(temporary_and_final[1][0], measurement)
+    write_diagnostic_json(temporary_and_final[2][0], payload)
+    for temporary, final in temporary_and_final:
+        temporary.replace(final)
 
 
 def _failure(
@@ -269,15 +342,17 @@ def run_center_bias_diagnostic(
             raise _SourceIntegrityError(
                 "Stage 6A source files changed during offline audit"
             )
-    except Exception as exc:
-        stage = (
-            "source_integrity"
-            if isinstance(exc, _SourceIntegrityError)
-            else "input_validation"
-        )
+    except _SourceIntegrityError as exc:
         return _failure(
             config=config,
-            stage=stage,
+            stage="source_integrity",
+            reason=f"{type(exc).__name__}:{exc}",
+            hashes_before=hashes_before,
+        )
+    except (KeyError, OSError, TypeError, ValueError) as exc:
+        return _failure(
+            config=config,
+            stage="input_validation",
             reason=f"{type(exc).__name__}:{exc}",
             hashes_before=hashes_before,
         )
@@ -307,15 +382,16 @@ def run_center_bias_diagnostic(
         "scientific_gate_reinterpreted": False,
         **{name: False for name in EXECUTION_FLAGS},
     }
-    write_diagnostic_json(
-        output_dir / "center_bias_diagnostic.json",
-        payload,
-    )
-    write_diagnostic_csv(
-        output_dir / "center_bias_diagnostic.csv",
-        measurement,
-    )
-    write_diagnostic_json(output_dir / "metadata.json", payload)
+    try:
+        _publish_success(output_dir, payload, measurement)
+    except (OSError, TypeError, ValueError) as exc:
+        _cleanup_outputs(output_dir)
+        return _failure(
+            config=config,
+            stage="output_publication",
+            reason=f"{type(exc).__name__}:{exc}",
+            hashes_before=hashes_before,
+        )
     return payload
 
 
@@ -339,6 +415,8 @@ def main() -> None:
         )
     )
     print(json.dumps(result, indent=2, ensure_ascii=False))
+    if result["status"] != "success":
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ import pytest
 
 from src.simulation.pybullet.center_bias_diagnostic import (
     PROTOCOL_VERSION,
+    CenterBiasMeasurement,
     compute_center_bias,
     write_diagnostic_csv,
     write_diagnostic_json,
@@ -53,6 +54,30 @@ def test_compute_center_bias_rejects_protocol_constant_changes() -> None:
             (0.0, 0.0, 0.0),
             (0.0, 0.0, 0.0),
             cube_half_extent_m=0.03,
+        )
+
+
+def test_compute_center_bias_rejects_finite_inputs_that_overflow() -> None:
+    with pytest.raises(ValueError, match="finite"):
+        compute_center_bias(
+            (1e308, 0.0, 0.0),
+            (-1e308, 0.0, 0.0),
+        )
+
+
+def test_measurement_rejects_forged_non_finite_derived_value() -> None:
+    with pytest.raises(ValueError, match="finite"):
+        CenterBiasMeasurement(
+            predicted_world_surface_point=(0.0, 0.0, 0.0),
+            cube_truth_center=(0.0, 0.0, 0.0),
+            cube_half_extent_m=0.025,
+            nominal_top_reference_z_m=0.025,
+            signed_x_offset_m=0.0,
+            signed_y_offset_m=0.0,
+            xy_offset_m=float("inf"),
+            signed_nominal_top_z_offset_m=-0.025,
+            xy_reference_threshold_m=0.005,
+            xy_within_reference_threshold=False,
         )
     with pytest.raises(ValueError, match="reference threshold"):
         compute_center_bias(

@@ -40,6 +40,32 @@ class CenterBiasMeasurement:
     xy_reference_threshold_m: float
     xy_within_reference_threshold: bool
 
+    def __post_init__(self) -> None:
+        _point3(
+            self.predicted_world_surface_point,
+            "predicted_world_surface_point",
+        )
+        _point3(self.cube_truth_center, "cube_truth_center")
+        scalars = (
+            self.cube_half_extent_m,
+            self.nominal_top_reference_z_m,
+            self.signed_x_offset_m,
+            self.signed_y_offset_m,
+            self.xy_offset_m,
+            self.signed_nominal_top_z_offset_m,
+            self.xy_reference_threshold_m,
+        )
+        if not all(math.isfinite(value) for value in scalars):
+            raise ValueError("center-bias measurement must remain finite")
+        if self.cube_half_extent_m != CUBE_HALF_EXTENT_M:
+            raise ValueError("cube half extent must remain frozen at 0.025 m")
+        if self.xy_reference_threshold_m != XY_REFERENCE_THRESHOLD_M:
+            raise ValueError(
+                "XY reference threshold must remain frozen at 0.005 m"
+            )
+        if not isinstance(self.xy_within_reference_threshold, bool):
+            raise ValueError("XY reference result must be boolean")
+
 
 def compute_center_bias(
     predicted_world_surface_point: Sequence[float],

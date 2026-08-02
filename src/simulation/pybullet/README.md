@@ -151,7 +151,8 @@ conda run -n msc-grasp python -m \
 质心与冻结 `0.025 m` 半高计算名义顶面参考。正式结果的 XY 偏差为
 `0.0265495568 m`，超过 `0.005 m` 参考门槛；名义顶面 Z 偏差为
 `0.0005091724 m`。诊断前后 Stage 6A 全目录哈希清单一致，且所有运动和抓取
-标志仍为 `false`。
+标志仍为 `false`。正式与重复性角色不能互用保留目录或覆盖不同角色的既有
+metadata；三个成功产物先写临时文件再发布，失败 CLI 返回非零状态。
 
 另一次真实 CUDA Stage 6A 重跑保存在独立的
 `stage_6a_geometry_preflight_reproducibility/`，再由相同诊断器写入
