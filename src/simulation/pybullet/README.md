@@ -133,6 +133,32 @@ conda run -n msc-grasp python \
 `execution_plan.json`。该阶段没有电机、闭合、接触或抬升，只能称为“几何
 感知执行计划通过静态预检”，不能称为仿真抓取成功。
 
+Stage 6A.1 冻结产物中心偏差诊断：
+
+```bash
+conda run -n msc-grasp python -m \
+  src.simulation.pybullet.run_center_bias_diagnostic \
+  --source-dir \
+  data/processed/pybullet/grasp_execution/stage_6a_geometry_preflight \
+  --output-dir \
+  data/processed/pybullet/grasp_execution/stage_6a1_center_bias_diagnostic \
+  --evidence-role formal
+```
+
+该命令只读取 Stage 6A 的 summary、metadata、冻结计划和 RGB，不加载模型、
+不创建 PyBullet 场景，也不调用任何运动或抓取接口。它先校验四个来源文件的
+协议、RGB 哈希、世界点和非执行边界，再使用 metadata 中拍摄时保存的 cube
+质心与冻结 `0.025 m` 半高计算名义顶面参考。正式结果的 XY 偏差为
+`0.0265495568 m`，超过 `0.005 m` 参考门槛；名义顶面 Z 偏差为
+`0.0005091724 m`。诊断前后 Stage 6A 全目录哈希清单一致，且所有运动和抓取
+标志仍为 `false`。
+
+另一次真实 CUDA Stage 6A 重跑保存在独立的
+`stage_6a_geometry_preflight_reproducibility/`，再由相同诊断器写入
+`stage_6a1_center_bias_reproducibility/`。其 RGB 哈希、定位、世界表面点和
+全部中心偏差数值与正式运行一致；该结果只证明当前固定协议可重复，不修改原
+计划，也不构成抓取成功。
+
 上述静态审计命令为每条二维抓取生成 `0°/180°` 两个世界 `-Z` 俯视候选，检查 Panda
 七关节 IK、`5 mm/5°` FK 误差和 `2 mm` 碰撞余量。两段关节插值各采样
 21 个状态，共 41 个唯一状态；状态只通过 DIRECT 中的 `resetJointState`
@@ -261,8 +287,9 @@ backend_comparison.png
 本模块已经实现二维抓取中心反投影、确定性六自由度悬停姿态、离线 IK/FK、
 离散碰撞余量审计、阶段 1 安全空中电机往返、阶段 2 真值方块上方 pregrasp，
 阶段 3 张开夹爪的接触前垂直接近、阶段 4 的开放夹爪短下探与双指接触，以及
-阶段 5 的真值方块抬升和保持，以及 Stage 6A 的 VLM + geometry 同场景感知、
-反投影与静态执行计划预检。阶段 1--5 已支持一例真值姿态仿真抓取成功判定，
-Stage 6A 只生成计划、尚未驱动机械臂；多头 CNN 也尚未接入。因此当前仍没有
-感知后端仿真抓取成功率。后续 Stage 6B 必须加载并复核冻结计划，再复用当前
-控制和物理门控。
+阶段 5 的真值方块抬升和保持、Stage 6A 的 VLM + geometry 同场景感知与静态
+执行计划预检，以及 Stage 6A.1 的冻结产物离线中心偏差诊断。阶段 1--5 已支持
+一例真值姿态仿真抓取成功判定；Stage 6A/6A.1 均未驱动机械臂，且已确认原始
+表面点不满足 `5 mm` XY 中心参考。多头 CNN 也尚未接入，因此当前仍没有感知
+后端仿真抓取成功率。下一步必须先冻结“原样执行”或“为两个后端共同修订中心
+恢复规则”的选择，再进入 Stage 6B。

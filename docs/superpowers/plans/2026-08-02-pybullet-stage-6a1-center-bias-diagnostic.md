@@ -30,7 +30,7 @@
 - Consumes: three-element finite `Sequence[float]` prediction and truth points.
 - Produces: `PROTOCOL_VERSION`, `CUBE_HALF_EXTENT_M`, `XY_REFERENCE_THRESHOLD_M`, frozen `CenterBiasMeasurement`, `compute_center_bias(predicted_world_surface_point, cube_truth_center, *, cube_half_extent_m=..., xy_reference_threshold_m=...) -> CenterBiasMeasurement`, `write_diagnostic_json(path: Path, payload: Mapping[str, object]) -> None`, and `write_diagnostic_csv(path: Path, measurement: CenterBiasMeasurement) -> None`.
 
-- [ ] **Step 1: Write failing calculation tests**
+- [x] **Step 1: Write failing calculation tests**
 
 ```python
 def test_compute_center_bias_records_signed_offsets_and_reference_gate():
@@ -60,7 +60,7 @@ def test_compute_center_bias_rejects_protocol_constant_changes():
         compute_center_bias((0.0, 0.0, 0.0), (0.0, 0.0, 0.0), cube_half_extent_m=0.03)
 ```
 
-- [ ] **Step 2: Verify the calculation tests fail for the missing module**
+- [x] **Step 2: Verify the calculation tests fail for the missing module**
 
 Run:
 
@@ -71,7 +71,7 @@ Run:
 
 Expected: collection error because `center_bias_diagnostic` does not exist.
 
-- [ ] **Step 3: Implement the minimal frozen measurement**
+- [x] **Step 3: Implement the minimal frozen measurement**
 
 ```python
 PROTOCOL_VERSION = "stage_6a1_center_bias_diagnostic_v1"
@@ -105,11 +105,11 @@ def compute_center_bias(...):
     return CenterBiasMeasurement(...)
 ```
 
-- [ ] **Step 4: Verify the calculation tests pass**
+- [x] **Step 4: Verify the calculation tests pass**
 
 Run the Task 1 pytest command. Expected: all current tests in the file pass.
 
-- [ ] **Step 5: Add failing stable-output tests**
+- [x] **Step 5: Add failing stable-output tests**
 
 ```python
 def test_diagnostic_writers_emit_strict_json_and_one_row_csv(tmp_path):
@@ -128,15 +128,15 @@ def test_diagnostic_json_rejects_non_finite_payload(tmp_path):
         write_diagnostic_json(tmp_path / "diagnostic.json", {"bad": float("nan")})
 ```
 
-- [ ] **Step 6: Run and verify the new output tests fail because writers are missing**
+- [x] **Step 6: Run and verify the new output tests fail because writers are missing**
 
 Run the Task 1 pytest command. Expected: FAIL at the missing writer behavior.
 
-- [ ] **Step 7: Implement strict JSON and CSV writers**
+- [x] **Step 7: Implement strict JSON and CSV writers**
 
 Use `json.dumps(..., indent=2, ensure_ascii=False, allow_nan=False) + "\n"`; write the CSV with an explicit field list matching every `CenterBiasMeasurement` field and serialize tuple fields as JSON arrays.
 
-- [ ] **Step 8: Run Task 1 tests and compile the module**
+- [x] **Step 8: Run Task 1 tests and compile the module**
 
 ```bash
 /home/pzk/miniconda/envs/msc-grasp/bin/python -m pytest \
@@ -147,7 +147,7 @@ Use `json.dumps(..., indent=2, ensure_ascii=False, allow_nan=False) + "\n"`; wri
 
 Expected: both commands exit 0.
 
-- [ ] **Step 9: Commit Task 1**
+- [x] **Step 9: Commit Task 1**
 
 ```bash
 git add src/simulation/pybullet/center_bias_diagnostic.py \
@@ -167,7 +167,7 @@ git commit -m "feat: define stage 6a1 center bias diagnostic"
 - Consumes: `load_geometry_execution_plan(path) -> GeometryExecutionPlan`, Task 1 calculation/writers, and a source directory containing `summary.json`, `metadata.json`, `execution_plan.json`, and `rgb.png`.
 - Produces: frozen `CenterBiasDiagnosticConfig(source_dir: Path, output_dir: Path, evidence_role: str = "formal")` and `run_center_bias_diagnostic(config: CenterBiasDiagnosticConfig) -> dict[str, object]`.
 
-- [ ] **Step 1: Write a valid Stage 6A fixture helper and failing success test**
+- [x] **Step 1: Write a valid Stage 6A fixture helper and failing success test**
 
 Build a valid `GeometryExecutionPlan` using the existing dataclasses and writer, then write minimal summary/metadata/RGB evidence with these exact invariants:
 
@@ -211,7 +211,7 @@ assert source_hashes_after == source_hashes_before
 assert not (source_dir / "center_bias_diagnostic.json").exists()
 ```
 
-- [ ] **Step 2: Verify the runner test fails because the module is missing**
+- [x] **Step 2: Verify the runner test fails because the module is missing**
 
 ```bash
 /home/pzk/miniconda/envs/msc-grasp/bin/python -m pytest \
@@ -220,19 +220,19 @@ assert not (source_dir / "center_bias_diagnostic.json").exists()
 
 Expected: collection error for missing `run_center_bias_diagnostic`.
 
-- [ ] **Step 3: Implement config, cleanup, hashing, and strict input loading**
+- [x] **Step 3: Implement config, cleanup, hashing, and strict input loading**
 
 `CenterBiasDiagnosticConfig.__post_init__` resolves paths and rejects identical or nested source/output directories, plus any `evidence_role` outside `("formal", "reproducibility")`. At run start, create only `output_dir`; remove stale `center_bias_diagnostic.json`, `center_bias_diagnostic.csv`, and output `metadata.json`. Read JSON as mappings, strictly load the plan, hash all four source files, and verify the actual `rgb.png` digest.
 
-- [ ] **Step 4: Implement cross-file validation and successful output**
+- [x] **Step 4: Implement cross-file validation and successful output**
 
 Validate protocol/status, seed/target/backend/prompt, RGB digest, world point, nested summary equality, zero post-capture steps, and every false execution flag. Compute the measurement from `metadata["scene"]["object_poses"]["cube"]["position"]`. Write a payload containing source paths/hashes, frozen protocol facts, `asdict(measurement)`, `diagnostic_only=True`, `plan_modified=False`, `scientific_gate_reinterpreted=False`, the historical Stage 6A gate value, and all execution flags false. Rehash sources after output and fail if any changed.
 
-- [ ] **Step 5: Run the success test and verify it passes**
+- [x] **Step 5: Run the success test and verify it passes**
 
 Run the Task 2 single-test command. Expected: PASS.
 
-- [ ] **Step 6: Add failing mismatch and failure-preservation tests**
+- [x] **Step 6: Add failing mismatch and failure-preservation tests**
 
 ```python
 @pytest.mark.parametrize("mutation", ["rgb_hash", "world_point", "execution_flag", "protocol"])
@@ -251,15 +251,15 @@ def test_offline_runner_rejects_source_output_overlap(tmp_path):
         CenterBiasDiagnosticConfig(tmp_path, tmp_path)
 ```
 
-- [ ] **Step 7: Run and verify at least one new test fails for missing validation**
+- [x] **Step 7: Run and verify at least one new test fails for missing validation**
 
 Run the full Task 2 test file. Expected: FAIL at the newly required mismatch/overlap behavior.
 
-- [ ] **Step 8: Implement failure metadata and all mismatch checks**
+- [x] **Step 8: Implement failure metadata and all mismatch checks**
 
 Catch input/validation exceptions only at the runner boundary. Return and write metadata with `status="failure"`, a precise `failure_stage`, `failure_reason`, `diagnostic_only=True`, and every execution flag false. Never remove or write within `source_dir`.
 
-- [ ] **Step 9: Verify Task 1–2 tests and forbidden-import boundary**
+- [x] **Step 9: Verify Task 1–2 tests and forbidden-import boundary**
 
 ```bash
 /home/pzk/miniconda/envs/msc-grasp/bin/python -m pytest \
@@ -275,7 +275,7 @@ Catch input/validation exceptions only at the runner boundary. Return and write 
 
 Expected: tests and compile exit 0; `rg` finds no forbidden dependency or action.
 
-- [ ] **Step 10: Commit Task 2**
+- [x] **Step 10: Commit Task 2**
 
 ```bash
 git add src/simulation/pybullet/run_center_bias_diagnostic.py \
@@ -301,7 +301,7 @@ git commit -m "feat: audit frozen stage 6a center bias"
 - Consumes: Task 2 CLI and the existing Stage 6A CLI.
 - Produces: formal and reproducibility diagnostic evidence plus accurate Chinese project records.
 
-- [ ] **Step 1: Hash the complete formal Stage 6A source directory before audit**
+- [x] **Step 1: Hash the complete formal Stage 6A source directory before audit**
 
 ```bash
 find data/processed/pybullet/grasp_execution/stage_6a_geometry_preflight \
@@ -309,7 +309,7 @@ find data/processed/pybullet/grasp_execution/stage_6a_geometry_preflight \
   > /tmp/stage6a-before.sha256
 ```
 
-- [ ] **Step 2: Run the formal offline Stage 6A.1 audit**
+- [x] **Step 2: Run the formal offline Stage 6A.1 audit**
 
 ```bash
 /home/pzk/miniconda/envs/msc-grasp/bin/python -m \
@@ -321,7 +321,7 @@ find data/processed/pybullet/grasp_execution/stage_6a_geometry_preflight \
 
 Expected: success, XY offset near `0.026550 m`, nominal-top Z offset near `0.000509 m`, XY reference gate false, all execution flags false.
 
-- [ ] **Step 3: Prove the formal Stage 6A directory is unchanged**
+- [x] **Step 3: Prove the formal Stage 6A directory is unchanged**
 
 Repeat the Step 1 pipeline to `/tmp/stage6a-after.sha256`, then run:
 
@@ -331,11 +331,11 @@ diff -u /tmp/stage6a-before.sha256 /tmp/stage6a-after.sha256
 
 Expected: exit 0 with no differences.
 
-- [ ] **Step 4: Independently inspect formal JSON, CSV, metadata, and source hashes**
+- [x] **Step 4: Independently inspect formal JSON, CSV, metadata, and source hashes**
 
 Use a read-only Python one-liner to assert the protocol, evidence role, offsets, false flags, and SHA-256 values against the current source files. Do not edit outputs after this check.
 
-- [ ] **Step 5: Run an isolated CUDA Stage 6A reproducibility trial**
+- [x] **Step 5: Run an isolated CUDA Stage 6A reproducibility trial**
 
 ```bash
 /home/pzk/miniconda/envs/msc-grasp/bin/python -m \
@@ -346,7 +346,7 @@ Use a read-only Python one-liner to assert the protocol, evidence role, offsets,
 
 Expected: real Grounding DINO CUDA run completes and writes a separate successful Stage 6A plan. If CUDA or the real model is unavailable, record reproducibility as not run; do not substitute a mocked/CPU result.
 
-- [ ] **Step 6: Diagnose the isolated reproducibility trial**
+- [x] **Step 6: Diagnose the isolated reproducibility trial**
 
 ```bash
 /home/pzk/miniconda/envs/msc-grasp/bin/python -m \
@@ -358,11 +358,11 @@ Expected: real Grounding DINO CUDA run completes and writes a separate successfu
 
 Expected: results remain separate from formal evidence. Compare localization, predicted point, XY offset, nominal-top Z offset, and RGB hash without automatically declaring equivalence.
 
-- [ ] **Step 7: Update README, structure, status, plan, and worklog from verified outputs only**
+- [x] **Step 7: Update README, structure, status, plan, and worklog from verified outputs only**
 
 Document the new modules and commands, formal measured offsets, unchanged-source proof, and reproducibility outcome. Preserve all existing user edits in these already modified files and state that the diagnostic does not change Stage 6A static safety or constitute grasp success.
 
-- [ ] **Step 8: Run focused and full verification**
+- [x] **Step 8: Run focused and full verification**
 
 ```bash
 /home/pzk/miniconda/envs/msc-grasp/bin/python -m pytest \
@@ -379,7 +379,7 @@ git diff --check
 
 Expected: all tests and compile commands exit 0; `git diff --check` reports no whitespace errors.
 
-- [ ] **Step 9: Commit code and verified records without generated data or LaTeX artifacts**
+- [x] **Step 9: Commit code and verified records without generated data or LaTeX artifacts**
 
 ```bash
 git add src/simulation/pybullet/README.md docs/agent/PROJECT_STRUCTURE.md \

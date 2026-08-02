@@ -45,6 +45,7 @@
 │           ├── gripper_control.py
 │           ├── lift_control.py
 │           ├── execution_plan.py
+│           ├── center_bias_diagnostic.py
 │           ├── grasp_execution.py
 │           ├── run_pose_ik_study.py
 │           ├── run_safe_motion_smoke.py
@@ -53,6 +54,7 @@
 │           ├── run_truth_contact.py
 │           ├── run_truth_lift.py
 │           ├── run_geometry_execution_preflight.py
+│           ├── run_center_bias_diagnostic.py
 │           ├── target_selection.py
 │           ├── visualization.py
 │           ├── run_pilot.py
@@ -75,6 +77,8 @@
 │       ├── test_pybullet_truth_lift.py
 │       ├── test_pybullet_execution_plan.py
 │       ├── test_pybullet_geometry_execution_preflight.py
+│       ├── test_pybullet_center_bias_diagnostic.py
+│       ├── test_pybullet_center_bias_runner.py
 │       ├── test_pybullet_perception.py
 │       ├── test_pybullet_smoke.py
 │       ├── test_pybullet_target_selection.py
@@ -156,6 +160,7 @@
 | `src/simulation/pybullet/gripper_control.py` | 保持 Panda 手臂并缓慢闭合双指，以真实 body/link/正法向力分类目标接触，取得双指接触后冻结命令并持续审计 |
 | `src/simulation/pybullet/lift_control.py` | 冻结双指命令并执行手臂抬升/保持，逐步审计 cube 上升量、桌面接触、工具相对漂移、双指接触和禁止碰撞 |
 | `src/simulation/pybullet/execution_plan.py` | 定义 Stage 6A 严格冻结的 geometry 感知执行计划；校验协议、相机、预测、三个位姿、七关节解、82 状态审计和唯一候选 |
+| `src/simulation/pybullet/center_bias_diagnostic.py` | 纯计算 Stage 6A.1 表面点—cube 质心 XY 偏差及名义顶面 Z 偏差，冻结 0.025 m 半高和 0.005 m 参考门槛并严格序列化 |
 | `src/simulation/pybullet/grasp_execution.py` | 复用真值 cube 的场景准备、姿态预检、分段电机执行、目标稳定性、抓取深度、双指接触与抬升保持门控及阶段证据写入 |
 | `src/simulation/pybullet/run_pose_ik_study.py` | 独立读取九点产物，审计 18 个候选并保存 CSV/JSON；不执行电机、轨迹或夹爪 |
 | `src/simulation/pybullet/run_safe_motion_smoke.py` | 阶段 1 安全空中往返 runner；先静态预检，再执行电机并保存 CSV/JSON/关键帧，不靠近或抓取目标 |
@@ -164,6 +169,7 @@
 | `src/simulation/pybullet/run_truth_contact.py` | 阶段 4 真值方块接触 runner；从 0.02 m 接触前高度张开下探至 0.005 m，再闭合并保持双指目标接触，不抬升 |
 | `src/simulation/pybullet/run_truth_lift.py` | 阶段 5 真值方块抬升 runner；重放阶段 2--4 后冻结夹爪，垂直抬升 cube 并保持 240 步，保存完整物理抓取证据 |
 | `src/simulation/pybullet/run_geometry_execution_preflight.py` | Stage 6A 同场景 VLM + geometry runner；实时定位、反投影并审计两个执行候选，只写冻结计划，不调用电机或夹爪 |
+| `src/simulation/pybullet/run_center_bias_diagnostic.py` | Stage 6A.1 离线 runner；交叉校验并哈希现有 Stage 6A 证据，在独立目录保存后验中心偏差和全 false 执行元数据 |
 | `src/simulation/pybullet/target_selection.py` | 使用仿真真值框事后评价多物体 prompt 目标选择，不向模型注入 segmentation |
 | `src/simulation/pybullet/visualization.py` | 绘制定位框、目标选择真值、二维抓取框和深度/分割诊断图 |
 | `src/simulation/pybullet/run_pilot.py` | 编排第一阶段仿真感知 pilot、CLI、产物和失败元数据 |
@@ -221,6 +227,12 @@ PyBullet 场景
                                                                                                                    └── grasp_execution/stage_3_open_approach/
                                                                                                                           └── 阶段 4 真值 cube 双指接触
                                                                                                                                  └── grasp_execution/stage_4_bilateral_contact/
+                                                                                                                                        └── 阶段 5 真值 cube 抬升与保持
+                                                                                                                                               └── grasp_execution/stage_5_truth_cube_lift/
+        └── Stage 6A VLM + geometry 冻结计划
+               └── grasp_execution/stage_6a_geometry_preflight/
+                      └── Stage 6A.1 只读中心偏差诊断
+                             └── grasp_execution/stage_6a1_center_bias_diagnostic/
 ```
 
 `data/` 被 `.gitignore` 排除。源码和文档不得依赖已提交的生成结果。
@@ -322,6 +334,10 @@ conda run -n msc-grasp python \
 conda run -n msc-grasp python \
   src/simulation/pybullet/run_geometry_execution_preflight.py \
   --device cuda
+
+# Stage 6A.1：只读冻结 Stage 6A 产物，保存中心偏差诊断
+conda run -n msc-grasp python -m \
+  src.simulation.pybullet.run_center_bias_diagnostic
 
 # 运行全部测试；使用 python -m pytest 保证仓库根目录可导入
 conda run -n msc-grasp python -m pytest -q
