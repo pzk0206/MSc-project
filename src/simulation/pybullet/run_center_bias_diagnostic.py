@@ -349,7 +349,7 @@ def run_center_bias_diagnostic(
             reason=f"{type(exc).__name__}:{exc}",
             hashes_before=hashes_before,
         )
-    except (KeyError, OSError, TypeError, ValueError) as exc:
+    except (OSError, ValueError) as exc:
         return _failure(
             config=config,
             stage="input_validation",
@@ -384,7 +384,7 @@ def run_center_bias_diagnostic(
     }
     try:
         _publish_success(output_dir, payload, measurement)
-    except (OSError, TypeError, ValueError) as exc:
+    except (OSError, ValueError) as exc:
         _cleanup_outputs(output_dir)
         return _failure(
             config=config,

@@ -396,14 +396,16 @@ def test_publication_failure_removes_partial_success_and_writes_failure(
     )["status"] == "failure"
 
 
+@pytest.mark.parametrize("error_type", [RuntimeError, TypeError, KeyError])
 def test_runner_does_not_convert_unexpected_programming_error_to_evidence(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    error_type: type[Exception],
 ) -> None:
     source_dir, output_dir = _write_stage_6a_fixture(tmp_path)
 
     def unexpected_bug(*args, **kwargs):
-        raise RuntimeError("unexpected bug")
+        raise error_type("unexpected bug")
 
     monkeypatch.setattr(
         runner_module,
@@ -411,7 +413,7 @@ def test_runner_does_not_convert_unexpected_programming_error_to_evidence(
         unexpected_bug,
     )
 
-    with pytest.raises(RuntimeError, match="unexpected bug"):
+    with pytest.raises(error_type, match="unexpected bug"):
         run_center_bias_diagnostic(
             CenterBiasDiagnosticConfig(source_dir, output_dir)
         )
