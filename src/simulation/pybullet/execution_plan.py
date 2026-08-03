@@ -14,6 +14,9 @@ from src.simulation.pybullet.pose_generation import ToolPose
 
 
 PROTOCOL_VERSION = "stage_6a_geometry_preflight_v1"
+PROTOCOL_VERSION_V2 = "stage_6a2_center_recovery_v1"
+
+VALID_BACKENDS = ("geometry", "multi_head")
 
 
 def _finite(values: Sequence[float], name: str) -> tuple[float, ...]:
@@ -105,6 +108,51 @@ class CameraEvidence:
 
 
 @dataclass(frozen=True)
+class CenterRecoveryEvidence:
+    """Evidence produced by windowed top-surface depth recovery.
+
+    Records the sampling strategy, pixel selection, and both the
+    original (single-pixel) and corrected world points so that the
+    effect of the rule is fully auditable.
+    """
+
+    protocol: str
+    window_size: int
+    original_depth_m: float
+    corrected_depth_m: float
+    original_world_surface_point: tuple[float, float, float]
+    corrected_world_surface_point: tuple[float, float, float]
+    sampled_pixel: tuple[int, int]
+    target_body_id: int
+    target_body_id_source: str  # "segmentation_mask"
+
+    def __post_init__(self) -> None:
+        if self.protocol != "windowed_min_depth_target_mask_v1":
+            raise ValueError("unknown center recovery protocol")
+        if self.window_size < 1 or self.window_size % 2 != 1:
+            raise ValueError("window_size must be a positive odd integer")
+        for name in (
+            "original_world_surface_point",
+            "corrected_world_surface_point",
+        ):
+            _fixed_tuple(getattr(self, name), 3, name)
+        scalars = _finite(
+            (self.original_depth_m, self.corrected_depth_m),
+            "center recovery depths",
+        )
+        if scalars[0] <= 0.0 or scalars[1] <= 0.0:
+            raise ValueError("center recovery depths must be positive")
+        if len(self.sampled_pixel) != 2 or min(self.sampled_pixel) < 0:
+            raise ValueError("sampled_pixel must be non-negative")
+        if self.target_body_id < 0:
+            raise ValueError("target_body_id must be non-negative")
+        if self.target_body_id_source != "segmentation_mask":
+            raise ValueError(
+                "target_body_id_source must be segmentation_mask"
+            )
+
+
+@dataclass(frozen=True)
 class PerceptionEvidence:
     """Immutable evidence produced before static pose selection."""
 
@@ -123,6 +171,7 @@ class PerceptionEvidence:
     backprojection_gate_passed: bool
     segmentation_target_match: bool
     ray_target_match: bool
+    center_recovery: CenterRecoveryEvidence | None = None
 
     def __post_init__(self) -> None:
         if self.prompt != "red cube":
@@ -301,6 +350,82 @@ class GeometryExecutionPlan:
             raise ValueError("plan must contain exactly one candidate selected")
 
 
+@dataclass(frozen=True)
+class PerceptionExecutionPlan:
+    """Stage 6A.2 plan supporting geometry and multi-head CNN backends.
+
+    Relaxes ``GeometryExecutionPlan`` to accept either backend and
+    mandates ``CenterRecoveryEvidence`` for V2 protocol plans.
+    """
+
+    protocol_version: str
+    scene_seed: int
+    target_name: str
+    backend: str
+    prompt: str
+    model_id: str
+    rgb_sha256: str
+    camera: CameraEvidence
+    perception: PerceptionEvidence
+    control: FrozenControlProtocol
+    candidates: tuple[PlannedPoseCandidate, PlannedPoseCandidate]
+
+    def __post_init__(self) -> None:
+        if self.protocol_version not in (
+            PROTOCOL_VERSION,
+            PROTOCOL_VERSION_V2,
+        ):
+            raise ValueError("unsupported protocol_version")
+        if self.scene_seed != 42:
+            raise ValueError("scene_seed must be 42")
+        if self.target_name != "cube":
+            raise ValueError("target_name must be cube")
+        if self.backend not in VALID_BACKENDS:
+            raise ValueError(
+                f"backend must be one of {VALID_BACKENDS}"
+            )
+        if self.prompt != "red cube" or self.perception.prompt != self.prompt:
+            raise ValueError("plan prompt must be red cube")
+        if self.model_id != "IDEA-Research/grounding-dino-tiny":
+            raise ValueError("unexpected Grounding DINO model_id")
+        if len(self.rgb_sha256) != 64 or any(
+            value not in "0123456789abcdef" for value in self.rgb_sha256
+        ):
+            raise ValueError("rgb_sha256 must be a lowercase SHA-256 digest")
+        if len(self.candidates) != 2:
+            raise ValueError("plan must contain exactly two candidates")
+        if tuple(row.symmetry_degrees for row in self.candidates) != (
+            0.0,
+            180.0,
+        ):
+            raise ValueError("candidates must be ordered 0 then 180 degrees")
+        if sum(row.selected for row in self.candidates) != 1:
+            raise ValueError(
+                "plan must contain exactly one candidate selected"
+            )
+        if (
+            self.protocol_version == PROTOCOL_VERSION_V2
+            and self.perception.center_recovery is None
+        ):
+            raise ValueError(
+                "V2 protocol plans require center_recovery evidence"
+            )
+        if (
+            self.protocol_version == PROTOCOL_VERSION_V2
+            and self.backend == "geometry"
+            and self.perception.center_recovery is not None
+        ):
+            # Allowed: geometry backend with V2 + center recovery.
+            pass
+        if (
+            self.protocol_version == PROTOCOL_VERSION
+            and self.backend != "geometry"
+        ):
+            raise ValueError(
+                "V1 protocol only supports geometry backend"
+            )
+
+
 def _expect_fields(
     value: Mapping[str, Any],
     data_class: type,
@@ -407,6 +532,89 @@ def load_geometry_execution_plan(path: Path) -> GeometryExecutionPlan:
         rgb_sha256=value["rgb_sha256"],
         camera=_camera(value["camera"]),
         perception=_perception(value["perception"]),
+        control=FrozenControlProtocol(**control_value),
+        candidates=tuple(_candidate(row) for row in value["candidates"]),
+    )
+
+
+def _recovery(value: Mapping[str, Any] | None) -> CenterRecoveryEvidence | None:
+    if value is None:
+        return None
+    _expect_fields(value, CenterRecoveryEvidence, "center_recovery")
+    converted = dict(value)
+    for name in (
+        "original_world_surface_point",
+        "corrected_world_surface_point",
+        "sampled_pixel",
+    ):
+        converted[name] = tuple(converted[name])
+    return CenterRecoveryEvidence(**converted)
+
+
+def _perception_v2(value: Mapping[str, Any]) -> PerceptionEvidence:
+    _expect_fields(value, PerceptionEvidence, "perception")
+    converted = dict(value)
+    for name in (
+        "localization_box",
+        "grasp_center",
+        "grasp_size",
+        "sampled_pixel",
+        "world_surface_point",
+    ):
+        converted[name] = tuple(converted[name])
+    converted["center_recovery"] = _recovery(
+        converted.get("center_recovery")
+    )
+    return PerceptionEvidence(**converted)
+
+
+def write_perception_execution_plan(
+    path: Path,
+    plan: PerceptionExecutionPlan,
+) -> None:
+    """Validate and serialize one Stage 6A.2 execution plan."""
+
+    if not isinstance(plan, PerceptionExecutionPlan):
+        raise TypeError("plan must be a PerceptionExecutionPlan")
+    output = Path(path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps(
+            asdict(plan),
+            indent=2,
+            ensure_ascii=False,
+            allow_nan=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def load_perception_execution_plan(path: Path) -> PerceptionExecutionPlan:
+    """Load and strictly revalidate a Stage 6A.2 execution plan."""
+
+    try:
+        value = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        raise ValueError(f"invalid execution plan JSON: {exc}") from exc
+    if not isinstance(value, dict):
+        raise ValueError("execution plan must be a JSON object")
+    _expect_fields(value, PerceptionExecutionPlan, "execution plan")
+    protocol = value["protocol_version"]
+    if protocol not in (PROTOCOL_VERSION, PROTOCOL_VERSION_V2):
+        raise ValueError(f"unsupported protocol_version: {protocol}")
+    control_value = value["control"]
+    _expect_fields(control_value, FrozenControlProtocol, "control")
+    return PerceptionExecutionPlan(
+        protocol_version=protocol,
+        scene_seed=value["scene_seed"],
+        target_name=value["target_name"],
+        backend=value["backend"],
+        prompt=value["prompt"],
+        model_id=value["model_id"],
+        rgb_sha256=value["rgb_sha256"],
+        camera=_camera(value["camera"]),
+        perception=_perception_v2(value["perception"]),
         control=FrozenControlProtocol(**control_value),
         candidates=tuple(_candidate(row) for row in value["candidates"]),
     )
