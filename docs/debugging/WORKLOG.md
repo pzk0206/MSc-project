@@ -2,6 +2,109 @@
 
 本文是回顾已完成项目工作的入口。详细内容保留在按日期命名的周报中。
 
+## 2026-08-04 — PyBullet 多头 CNN 感知 preflight 与物理抓取执行
+
+- 新增多头 CNN preflight runner，使用单像素反投影（无中心恢复）生成 V2
+  协议执行计划，与 geometry 保持相同的感知→候选→审计管线。
+- 多头 CNN 定位框 `[296,189,344,245]`、分数 `0.8221`、cube IoU `0.8717`；
+  二维抓取中心 `(318.0,212.0)`、角度 `-6.18°`、深度 `0.685 m`、世界表面点
+  `(0.504,0.004,0.675) m`。
+- 正式预检通过：两个对称候选（0°/180°）均通过 IK/FK 和两阶段碰撞审计
+  （接触前含 cube，抓取深度排除 cube），选择 0° 候选。
+- 产物位于 `data/processed/pybullet/grasp_execution/stage_6a_multi_head_preflight/`，
+  包含 execution_plan.json、候选 CSV、summary 和 metadata。
+- Stage 6B 使用多头计划执行完整七阶段物理抓取。pregrasp/approach/grasp_depth
+  到达门控全部通过，夹爪闭合并建立双指接触（首次接触 218/240 步），但抬升失败：
+  cube 仅上升 0.34mm，相对漂移 120mm，桌面接触 481 次。
+- 根因确认为 XY 偏差 24.67mm（相对 cube 质心），超过 cube 半宽 25mm。夹爪仅
+  触及边缘，无法稳定抓取。
+- **配对结论**：geometry（26.62mm 偏差）与 multi-head（24.67mm 偏差）在
+  同一问题上失败——单像素反投影无法从斜视相机恢复真实三维中心。两个后端的
+  失败模式一致，根因在感知管线前端而非后端选择。
+- 产物位于 `data/processed/pybullet/grasp_execution/stage_6b_multi_head_grasp/`，
+  包含七张关键帧、state_trace.csv、contact_events.csv、summary 和 metadata。
+- 放宽 `PerceptionExecutionPlan` 允许 V2 协议下 `center_recovery=None`，
+  Stage 6B runner 适配为同时接受 geometry 和 multi_head 计划。
+- 新增 1 项 runner 文件；simulation 共 `209` 项，完整项目回归为 `209 passed`。
+- 后续：更新论文 PyBullet 章节，将真值成功（阶段 5）+ geometry 感知失败
+  （Stage 6B）+ 多头感知失败写入论文。
+
+## 2026-08-03 — PyBullet Stage 6B 感知驱动物理抓取执行
+
+- 新增 Stage 6B runner，加载 Stage 6A 冻结执行计划（geometry 后端），直接使用
+  计划中的预计算 IK 解和感知位姿驱动机器人完成完整抓取链条，不再使用真值坐标。
+- 分两阶段静态预检：接触前审计（neutral→approach，含 cube）和抓取深度审计
+  （approach→grasp_depth，排除 cube），匹配 Stage 6A 的门控策略。
+- 正式 DIRECT 运行依次执行 pregrasp/approach/grasp_depth/close/contact_hold/
+  lift/lift_hold 七个阶段。pregrasp、approach 和 grasp_depth 到达误差均在
+  1.04mm 以内，全部通过动态门控。
+- 夹爪闭合成功（双指接触），但首次接触发生在闭合第 226/240 步，远晚于真值
+  阶段的 93 步，表明夹爪仅抓住 cube 边缘。
+- 抬升阶段失败：cube 仅上升 0.38mm（远低于 100mm 门槛），全程接触桌面 481 次，
+  末端—cube 相对漂移达 120mm——cube 完全未离桌，抓取滑脱。
+- 根因确认为感知世界表面点 XY 偏差 26.62mm（相对 cube 质心），超过 cube
+  半宽 25mm。夹爪中心偏移一个半宽以上，只能触及边缘，无法稳定抓取。
+- 该结果构成 PyBullet 章的核心物理证据：VLM + 几何后端的感知管线可以通过
+  全部静态门控和到达门控，但在物理抬升中因三维中心偏差导致抓取失败。
+- 产物位于 `data/processed/pybullet/grasp_execution/stage_6b_perception_grasp/`，
+  包含七张关键帧、state_trace.csv（全阶段轨迹）、contact_events.csv、summary
+  和 metadata；全部运动和抓取标志为 `true`。
+- 新增 20 项 Stage 6B 配置、计划契约、无效拒绝和完整管线测试，simulation 共
+  `209` 项；完整项目回归为 `209 passed`。
+- 后续：以相同计划契约接入 VLM + 多头 CNN（复用同一场景初态和控制参数），
+  完成两个后端的配对物理证据后冻结正式结论。
+
+## 2026-08-03 — PyBullet Stage 6A.2 共同中心恢复预检
+
+- 新增 `center_recovery.py`，实现窗口化目标 mask 深度恢复：在二维抓取中心
+  周围 5×5 窗口内，取目标分割 mask 内最小（最浅）深度，用原始像素坐标
+  回投得到修正世界点；协议冻结为 `windowed_min_depth_target_mask_v1`。
+- 新增 V2 协议和 `PerceptionExecutionPlan`，支持多后端（geometry/multi_head）
+  共用同一相机 RGB、定位、深度和中心恢复证据，各自生成独立审计计划。
+- 新增 Stage 6A.2 runner：同场景渲染单帧后依次运行 Grounding DINO `red cube`
+  定位、geometry 与 multi-head 二维抓取预测、窗口化中心恢复、候选生成和
+  静态 IK/FK 碰撞审计；两个后端共享同一定位框和分割 mask。
+- 正式 CUDA 运行：定位框 `[297,189,344,245]`、分数 `0.8170`、cube IoU
+  `0.8717`；geometry 原始/修正世界点为
+  `(0.506456,0.002225,0.675478)/(0.507511,0.002220,0.676492) m`，
+  multi-head 为 `(0.504315,0.003716,0.675479)/(0.506172,0.003702,0.677257) m`。
+- **核心发现：窗口化最小深度恢复未降低 XY 中心偏差，反而轻度恶化。**
+  相对 cube 真值质心 `(0.48, 0.0)`，geometry XY 偏差从 `26.55 mm` 升至
+  `27.60 mm`（+1.05 mm），multi-head 从 `24.60 mm` 升至 `26.43 mm`
+  （+1.83 mm），两个均远超 `5 mm` 参考门槛。
+- 根因：斜视相机位于 X=1.0 m 处，cube 在 X=0.48 m；窗口内最小深度自然
+  选中 cube 朝向相机的边缘，进一步把世界点拉向 +X 方向。Z 高度恢复仍然
+  准确（geometry +1.52 mm，multi-head +2.29 mm 相对名义顶面）。
+- 两个后端均通过静态 IK/FK 和碰撞门控（`scientific_gate_passed: true`），
+  中心恢复方法应用一致（`center_recovery_identical: true`）。该结果排除了
+  窗口化最小深度方案，为后续决策提供了明确证据。
+- 产物位于 `data/processed/pybullet/grasp_execution/stage_6a2_center_recovery/`，
+  包含 RGB、深度、segmentation、定位图、两个后端预测图、各自
+  `execution_plan.json`、候选 CSV 和 metadata；全部运动和抓取标志为 `false`。
+- 下一步：回退到原始单像素反投影，原样消费 Stage 6A 的冻结计划执行 Stage
+  6B 物理 pilot，在论文中诚实披露斜视相机固有 XY 偏差。
+
+## 2026-08-02 — PyBullet Stage 6A.1 中心偏差诊断与重复性复核
+
+- 新增不依赖 PyBullet、Torch 或 Transformers 的纯中心偏差模块，冻结
+  `0.025 m` cube 半高与 `0.005 m` XY 参考门槛，严格拒绝非有限值和协议改动。
+- 新增完全离线的 Stage 6A.1 runner，交叉校验 summary、metadata、RGB 和
+  `execution_plan.json` 的协议、哈希、世界点与非执行边界；输入/输出重叠、
+  跨文件篡改或旧成功产物均有专门失败保真测试。
+- 正式诊断只读取现有 Stage 6A 产物，得到 X/Y 偏差
+  `0.0264561227/0.0022254299 m`、XY 偏差 `0.0265495568 m`，不满足
+  `0.005 m` 参考门槛；相对派生名义顶面参考的 Z 偏差为 `0.0005091724 m`。
+- 诊断前后正式 Stage 6A 全目录 SHA-256 清单无差异；原计划没有修改，电机、
+  轨迹、夹爪、接触、抬升和物理抓取标志均为 `false`。
+- 在独立目录完成第二次真实 CUDA Stage 6A 和相同 Stage 6A.1 诊断。RGB 哈希、
+  定位框/分数、二维抓取、世界表面点及全部偏差数值与正式运行一致；该结果只
+  支持固定协议重复性，不支持感知抓取成功。
+- 独立代码审查后进一步增加正式/重复性角色目录保护、CLI 失败非零退出、有限
+  输入运算溢出拒绝、事务式成功产物发布和意外编程异常传播边界。
+- 新增 27 项 Stage 6A.1 计算、序列化、输入隔离、篡改拒绝和失败保真测试；
+  simulation 共 162 项，完整项目回归为 `194 passed`；下一步根据该证据冻结
+  原样执行或公平共享中心恢复规则，再进入 Stage 6B。
+
 ## 2026-08-01 — PyBullet Stage 6A 几何感知执行计划预检
 
 - 将候选 IK/FK、41 状态碰撞和确定性选择从离线研究 runner 提升为共享接口；
@@ -19,8 +122,16 @@
   `(0.506456,0.002225,0.675478) m`。两个候选均通过 82 状态门控，选择 `0°`。
 - RGB 哈希、候选 CSV、summary、metadata 和冻结 `execution_plan.json` 保存至
   `data/processed/pybullet/grasp_execution/stage_6a_geometry_preflight/`；两张
-  图已人工确认定位/中心正确，geometry 框宽于物体的真实特征被保留。本阶段
-  全部运动和抓取标志为假，不能称为仿真抓取成功。
+  图已人工确认二维定位框与中心点落在目标上，geometry 框宽于物体的真实特征
+  被保留；该图像检查不代表三维夹爪中心正确。本阶段全部运动和抓取标志为假，
+  不能称为仿真抓取成功。
+- 运行后使用已保存 scene truth 做单向后验审计：预测世界表面点相对 cube
+  质心的 X/Y 偏差为 `0.026456 m/0.002225 m`，XY 合成偏差 `0.026550 m`；
+  相对 cube 顶面的 Z 偏差仅 `0.000509 m`。结果表明单像素反投影准确恢复了
+  可见表面高度，但斜视表面点并非物体三维中心。
+- 该后验真值没有进入感知或计划生成，不追溯修改 Stage 6A 的静态安全门控。
+  下一小步改为无运动的 Stage 6A.1 中心偏差证据；在决定原样执行还是采用对
+  geometry/多头共同适用的中心恢复规则前，不直接把计划称为可抓取计划。
 - 新增 20 项共享审计、计划契约、真实同场景和失败保真测试，simulation 共
   `135` 项；完整项目回归为 `167 passed`，Python 编译和差异检查通过。
 
