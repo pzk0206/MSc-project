@@ -573,8 +573,8 @@ class TestPerceptionExecutionPlanRoundTrip:
         assert loaded.backend == "multi_head"
         assert loaded.perception.center_recovery is not None
 
-    def test_v2_plan_requires_center_recovery(self, tmp_path: Path) -> None:
-        """A V2 plan without centre recovery must be rejected."""
+    def test_v2_plan_allows_null_center_recovery(self, tmp_path: Path) -> None:
+        """A V2 plan with null centre recovery loads successfully."""
         _lazy_imports()
 
         from src.simulation.pybullet.execution_plan import (
@@ -639,12 +639,13 @@ class TestPerceptionExecutionPlanRoundTrip:
             gate_passed=True, selected=False, failure_reason="",
         )
 
-        with pytest.raises(ValueError, match="center_recovery"):
-            PerceptionExecutionPlan(
-                protocol_version=_PROTOCOL_VERSION_V2,
-                scene_seed=42, target_name="cube", backend="geometry",
-                prompt="red cube", model_id="IDEA-Research/grounding-dino-tiny",
-                rgb_sha256="c" * 64, camera=camera, perception=perception,
+        # V2 plans now allow null center_recovery (single-pixel backprojection)
+        plan = PerceptionExecutionPlan(
+            protocol_version=_PROTOCOL_VERSION_V2,
+            scene_seed=42, target_name="cube", backend="geometry",
+            prompt="red cube", model_id="IDEA-Research/grounding-dino-tiny",
+            rgb_sha256="c" * 64, camera=camera, perception=perception,
                 control=FrozenControlProtocol(),
                 candidates=(candidate, alt),
             )
+        assert plan.perception.center_recovery is None

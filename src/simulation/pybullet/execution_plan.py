@@ -404,20 +404,6 @@ class PerceptionExecutionPlan:
                 "plan must contain exactly one candidate selected"
             )
         if (
-            self.protocol_version == PROTOCOL_VERSION_V2
-            and self.perception.center_recovery is None
-        ):
-            raise ValueError(
-                "V2 protocol plans require center_recovery evidence"
-            )
-        if (
-            self.protocol_version == PROTOCOL_VERSION_V2
-            and self.backend == "geometry"
-            and self.perception.center_recovery is not None
-        ):
-            # Allowed: geometry backend with V2 + center recovery.
-            pass
-        if (
             self.protocol_version == PROTOCOL_VERSION
             and self.backend != "geometry"
         ):
@@ -464,8 +450,11 @@ def _camera(value: Mapping[str, Any]) -> CameraEvidence:
 
 
 def _perception(value: Mapping[str, Any]) -> PerceptionEvidence:
-    _expect_fields(value, PerceptionEvidence, "perception")
     converted = dict(value)
+    # V1 protocol plans do not include center_recovery
+    if "center_recovery" not in converted:
+        converted["center_recovery"] = None
+    _expect_fields(converted, PerceptionEvidence, "perception")
     for name in (
         "localization_box",
         "grasp_center",
