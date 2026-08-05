@@ -5,6 +5,7 @@
 ```text
 .
 ├── AGENTS.md
+├── CLAUDE.md
 ├── README.md
 ├── src/
 │   ├── shared/
@@ -55,6 +56,10 @@
 │           ├── run_truth_lift.py
 │           ├── run_geometry_execution_preflight.py
 │           ├── run_center_bias_diagnostic.py
+│           ├── run_stage6a2_recovery_preflight.py
+│           ├── center_recovery.py
+│           ├── run_stage6b_pipeline.py
+│           ├── run_multi_head_preflight.py
 │           ├── target_selection.py
 │           ├── visualization.py
 │           ├── run_pilot.py
@@ -79,6 +84,8 @@
 │       ├── test_pybullet_geometry_execution_preflight.py
 │       ├── test_pybullet_center_bias_diagnostic.py
 │       ├── test_pybullet_center_bias_runner.py
+│       ├── test_pybullet_stage6a2_recovery_preflight.py
+│       ├── test_pybullet_stage6b_pipeline.py
 │       ├── test_pybullet_perception.py
 │       ├── test_pybullet_smoke.py
 │       ├── test_pybullet_target_selection.py
@@ -95,7 +102,8 @@
 │   │   └── vlm_robotic_grasp_study_plan.md
 │   ├── debugging/
 │   │   ├── BUGLOG.md
-│   │   └── FAILURE_ANALYSIS.md
+│   │   ├── FAILURE_ANALYSIS.md
+│   │   └── WORKLOG.md
 │   ├── planning/
 │   │   ├── cnn_architecture_rationale.md
 │   │   └── modern_2d_grasp_literature_matrix.md
