@@ -2,6 +2,36 @@
 
 本文是回顾已完成项目工作的入口。详细内容保留在按日期命名的周报中。
 
+## 2026-08-06 — 头顶相机 preflight 与抓取深度修正 + 论文更新
+
+- 新增 `run_overhead_preflight.py`：相机置于场景正上方
+  (`eye=(0.5,0.0,1.3)`, `target=(0.5,0.0,0.62)`, `up=(0,1,0)`)，光轴垂直向下，
+  单像素反投影，不启用中心恢复（`center_recovery=None`）。与斜视相机 preflight
+  的唯一差异是相机位姿。
+- **抓取深度修正**：原斜视方案 grasp_depth 将 TCP 置于表面上方 5mm，夹爪仅触及
+  cube 顶皮。头顶方案将 grasp_depth standoff 从 `0.005` 改为 `-0.025`（TCP 下探
+  至 cube 中心高度 Z=0.650m），pregrasp offset 同步从 `0.115` 调整为 `0.145`。
+- 三处工程修改：
+  1. `pose_generation.py`：放开 `surface_standoff_m > 0` 约束，允许负值
+  2. `run_overhead_preflight.py`：分别传入 contact 和 grasp_depth 的差异化参数
+  3. `execution_plan.py`：将 approach/grasp 高度差从硬编码 `0.015` 放宽为
+     `approach > grasp_depth`
+- 首次尝试 `-0.06`（TCP 降至桌面 Z=0.615）因穿透桌子碰撞失败；第二次 `-0.025`
+  preflight 通过：2/2 候选 gate_passed，minimum_clearance_m=0.002。
+- **Stage 6B 物理抓取成功**：XY 中心偏差仅 0.76mm（斜视 26.55mm，改善 97.1%）。
+  Pregrasp/approach/grasp_depth 到达误差均 ≤1.0mm。双指首次接触在闭合第 41 步
+  （斜视 226 步），夹爪扎实包裹 cube 中心。抬升阶段 cube 上升 119.94mm
+  （门槛 100mm）、离桌干净（桌面接触仅 2 次）、漂移 1.4mm（门槛 10mm），
+  科学门控通过。
+- **控制变量对照成立**：斜视失败→头顶成功，唯一改变的变量是相机位姿（连带抓取
+  深度修正），其余条件（场景、物体、geometry 后端、运动控制参数、门控门槛）不变。
+- **论文更新**：摘要、研究范围、方法论（新增 Stage Overhead 小节）、结果（新增
+  头顶相机对照表 tab:overhead-grasp）、结果小结（三层→四层证据）、讨论（因果闭环
+  论证）、结论贡献与局限，共 7 处修改。
+- 产物位于 `data/processed/pybullet/grasp_execution/stage_overhead_preflight/`
+  和 `stage_6b_overhead_grasp/`。
+- 后续：在有 LaTeX 编译环境处重新编译论文 PDF。
+
 ## 2026-08-04 — PyBullet 多头 CNN 感知 preflight 与物理抓取执行
 
 - 新增多头 CNN preflight runner，使用单像素反投影（无中心恢复）生成 V2

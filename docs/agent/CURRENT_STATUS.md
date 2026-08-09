@@ -2,7 +2,7 @@
 
 > AI 任务入口：开始项目工作前先阅读本文件。
 
-最后更新：2026-08-04
+最后更新：2026-08-06
 
 ## 当前阶段
 
@@ -39,6 +39,26 @@ grasp_depth 到达误差均在 1.04mm 以内，夹爪闭合成功但仅触及 cu
 接触在 226/240 步），抬升阶段 cube 完全未离桌（上升 0.38mm，漂移 120mm），
 科学门控未通过。该结果构成 PyBullet 章的核心物理证据：感知管线可通过全部
 静态与到达门控，但 XY 中心偏差 `26.62 mm` 导致物理抓取失败。
+
+	XY 偏差 `26.62 mm` 导致物理抓取失败。为从根本上消除斜视相机引入的反投影
+	中心偏差，新增头顶（overhead）相机 preflight：相机置于场景正上方
+	(`eye=(0.5,0.0,1.3)`, `target=(0.5,0.0,0.62)`)，光轴垂直向下，采用
+	`up=(0,1,0)` 避免 top-down view matrix 退化。头顶 preflight 使用单像素反投影
+	且不启用中心恢复（`center_recovery=None`）。preflight 通过后，发现抓取深度
+	仍然沿用旧值 `surface_standoff_m=0.005`（TCP 在 cube 顶部上方 5mm），导致
+	Stage 6B 夹爪虽获得双指接触但仅触及 cube 顶皮，抬升时 cube 滑脱。为此调整
+	三个文件：(1) `pose_generation.py` 放开 `surface_standoff_m > 0` 约束，允许
+	负值（TCP 低于表面）；(2) `run_overhead_preflight.py` 将抓取深度 standoff 从
+	`0.005` 改为 `-0.025`（TCP 下探至 cube 中心），pregrasp offset 从 `0.115`
+	同步调整为 `0.145`；(3) `execution_plan.py` 将 approach 与 grasp depth 的
+	硬编码高度差 `0.015` 放宽为 `approach > grasp_depth`。首次尝试 `-0.06`
+	（TCP 降至桌面高度 Z=0.615）因穿透桌子导致碰撞审计失败；第二次 `-0.025`
+	（TCP 在 cube 中心 Z=0.650）preflight 通过，两候选均通过 IK/FK 与碰撞审计。Stage 6B 随后加载该头顶计划
+	执行物理抓取：pregrasp/approach/grasp_depth 到达全部通过（误差均 ≤ 1.0mm），
+	XY 中心偏差仅 0.76mm（斜视相机为 26.55mm，改善 97.1%），双指首次接触在
+	第 41 步（斜视为 226 步），夹爪扎实包裹 cube 中心。抬升阶段 cube 上升
+	119.94mm、离桌干净（桌面接触仅 2 次）、保持漂移 1.4mm，scientific_gate
+	通过。**头顶相机 + 抓取深度修正实现了从感知到物理抓取的完整成功链条。**
 
 ## 已完成的实验流程
 
@@ -110,6 +130,15 @@ grasp_depth 到达误差均在 1.04mm 以内，夹爪闭合成功但仅触及 cu
       抬升失败（上升 0.34mm，偏差 24.67mm）。
     - **配对结论**：geometry（26.62mm）与 multi-head（24.67mm）在同一问题
       上失败——根因在感知管线前端（斜视相机），而非后端选择。
+16. **PyBullet 头顶相机 preflight 与抓取深度修正**
+    - 新增 `run_overhead_preflight.py`：相机垂直向下置于场景正上方，单像素
+      反投影，不启用中心恢复，从根本上消除斜视反投影偏差。
+    - 修改 `pose_generation.py`（允许负 `surface_standoff_m`）、
+      `run_overhead_preflight.py`（抓取深度 `0.005 → -0.025`）、
+      `execution_plan.py`（approach/grasp 高度差放宽为 `approach > grasp_depth`）。
+    - 首次尝试 `-0.06`（桌面高度 Z=0.615）因穿透桌子碰撞失败；第二次
+      `-0.025`（cube 中心 Z=0.650）preflight 通过：2/2 候选 gate_passed，
+      `minimum_clearance_m=0.002`。
 
 ## 最新已验证结果
 
@@ -437,10 +466,15 @@ Stage 6A 也已让 geometry 产生通过静态预检的冻结计划，但后验�
    pilot 确认静态+到达门控全部通过，但 XY 偏差 26.62mm 导致抬升失败。
 5. ~~以相同计划契约接入 VLM + 多头 CNN~~已完成：多头物理抓取同样失败，
    XY 偏差 24.67mm，与 geometry 的一致失败模式确认根因在感知管线前端。
-6. **下一步**：更新论文 PyBullet 章节，将真值成功（阶段 5）+ 两个后端的
-   感知失败（Stage 6B）写入论文，形成完整的物理证据链。duck 的
-   现有余量失败单独诊断，不通过放宽真值控制门槛掩盖。
-7. 权威 object-wise、RGB-D 和真实机器人验证继续作为后续研究，不扩张为
+6. ~~更新论文 PyBullet 章节~~已完成：真值成功（阶段 5）+ 两个后端的感知
+   失败（Stage 6B）已写入论文形成物理证据链。
+7. ~~头顶相机 Stage 6B 物理抓取~~已完成：scientific_gate_passed=true，
+   XY 偏差 0.76mm、抬升 119.94mm、漂移 1.4mm。感知驱动物理抓取首次完整成功。
+8. ~~头顶相机方案写入论文~~已完成：方法（Stage Overhead 预检与抓取深度修正）
+   和结果（头顶相机物理抓取对照表）已写入 `l4proj.tex` PyBullet 章节，与斜视
+   相机失败形成对照证据链。headless 模式下 motion config 步数不足导致 v4 抬升
+   失败的问题已修复（`run_stage6b_pipeline.py` 去掉 GUI 条件分支），v5 复现成功。
+9. 权威 object-wise、RGB-D 和真实机器人验证继续作为后续研究，不扩张为
    当前已完成结论。
 
 ## 后续阅读

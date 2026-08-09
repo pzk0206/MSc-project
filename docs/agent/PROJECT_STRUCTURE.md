@@ -59,6 +59,8 @@
 │           ├── run_stage6a2_recovery_preflight.py
 │           ├── center_recovery.py
 │           ├── run_stage6b_pipeline.py
+│           ├── run_overhead_preflight.py
+│           ├── run_overhead_side_grasp.py
 │           ├── run_multi_head_preflight.py
 │           ├── target_selection.py
 │           ├── visualization.py
@@ -177,6 +179,8 @@
 | `src/simulation/pybullet/run_truth_contact.py` | 阶段 4 真值方块接触 runner；从 0.02 m 接触前高度张开下探至 0.005 m，再闭合并保持双指目标接触，不抬升 |
 | `src/simulation/pybullet/run_truth_lift.py` | 阶段 5 真值方块抬升 runner；重放阶段 2--4 后冻结夹爪，垂直抬升 cube 并保持 240 步，保存完整物理抓取证据 |
 | `src/simulation/pybullet/run_geometry_execution_preflight.py` | Stage 6A 同场景 VLM + geometry runner；实时定位、反投影并审计两个执行候选，只写冻结计划，不调用电机或夹爪 |
+| `src/simulation/pybullet/run_overhead_preflight.py` | Stage 6A 头顶相机几何预检；相机垂直向下置于场景正上方，单像素反投影无中心恢复，消除斜视偏差 |
+| `src/simulation/pybullet/run_overhead_side_grasp.py` | 头顶相机侧向抓取变体；与 run_overhead_preflight.py 共享同一 pipeline |
 | `src/simulation/pybullet/run_center_bias_diagnostic.py` | Stage 6A.1 离线 runner；交叉校验并哈希现有 Stage 6A 证据，在独立目录保存后验中心偏差和全 false 执行元数据 |
 | `src/simulation/pybullet/target_selection.py` | 使用仿真真值框事后评价多物体 prompt 目标选择，不向模型注入 segmentation |
 | `src/simulation/pybullet/visualization.py` | 绘制定位框、目标选择真值、二维抓取框和深度/分割诊断图 |
@@ -225,6 +229,9 @@ PyBullet 场景
                                                     └── 二维中心 + depth + 相机矩阵
                                                            └── 世界坐标与九点审计
                                                                   └── 两个俯视悬停候选
+                                                                  ├── 头顶相机 preflight（消除斜视 XY 偏差 26.55→0.76mm）
+                                                                  │      └── 抓取深度修正（TCP 从表面+5mm 下探至 cube 中心-25mm）
+                                                                  │             └── Stage 6B 物理抓取首次成功
                                                                          └── Panda IK/FK + 41 状态碰撞审计
                                                                                 ├── data/processed/pybullet/
                                                                                 └── 阶段 1 电机安全空中往返
