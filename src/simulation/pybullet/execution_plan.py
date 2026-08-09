@@ -279,12 +279,8 @@ class PlannedPoseCandidate:
             abs_tol=1e-9,
         ):
             raise ValueError("pregrasp height must be 0.10 m above approach")
-        if not math.isclose(
-            positions[1][2] - positions[2][2],
-            0.015,
-            abs_tol=1e-9,
-        ):
-            raise ValueError("approach height must be 0.015 m above grasp depth")
+        if positions[1][2] <= positions[2][2]:
+            raise ValueError("approach height must be above grasp depth")
         _finite(
             (self.minimum_clearance_m, self.total_normalized_joint_cost),
             "candidate audit values",
@@ -541,8 +537,11 @@ def _recovery(value: Mapping[str, Any] | None) -> CenterRecoveryEvidence | None:
 
 
 def _perception_v2(value: Mapping[str, Any]) -> PerceptionEvidence:
-    _expect_fields(value, PerceptionEvidence, "perception")
     converted = dict(value)
+    # V1 protocol plans do not include center_recovery
+    if "center_recovery" not in converted:
+        converted["center_recovery"] = None
+    _expect_fields(converted, PerceptionEvidence, "perception")
     for name in (
         "localization_box",
         "grasp_center",

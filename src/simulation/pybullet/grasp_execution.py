@@ -10,6 +10,7 @@ import json
 import math
 from pathlib import Path
 import sys
+import time
 from typing import Any, Sequence
 
 import cv2
@@ -643,6 +644,10 @@ def run_truth_execution(
 ) -> dict[str, object]:
     """Execute one truth-pose stage within its declared boundary."""
 
+    def _gui_pause(sec: float = 4.0) -> None:
+        if config.gui:
+            time.sleep(sec)
+
     output_dir = Path(config.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     scene_config = replace(
@@ -841,7 +846,12 @@ def run_truth_execution(
             cube_id,
             scene.client_id,
         )
-        motion_config = MotionConfig(joint_tolerance_rad=0.002)
+        motion_config = (
+            MotionConfig(steps_per_segment=1920, settle_steps=960,
+                         joint_tolerance_rad=0.002)
+            if config.gui
+            else MotionConfig(joint_tolerance_rad=0.002)
+        )
         pregrasp_execution = execute_joint_motion(
             robot_id=scene.bodies.robot,
             client_id=scene.client_id,
@@ -855,6 +865,7 @@ def run_truth_execution(
             config=motion_config,
         )
         pregrasp_rgb = _capture_rgb(scene)
+        _gui_pause()
         pregrasp_reached = dict(pregrasp_execution.segment_reached)[
             "pregrasp"
         ]
@@ -896,6 +907,7 @@ def run_truth_execution(
                 config=motion_config,
             )
             approach_rgb = _capture_rgb(scene)
+            _gui_pause()
             if stage in (
                 TruthExecutionStage.CLOSE_CONTACT,
                 TruthExecutionStage.LIFT_HOLD,
@@ -959,6 +971,7 @@ def run_truth_execution(
                         config=motion_config,
                     )
                     grasp_depth_rgb = _capture_rgb(scene)
+                    _gui_pause()
                     grasp_row = grasp_depth_execution.trace[-1]
                     grasp_position_error, grasp_orientation_error = _pose_errors(
                         grasp_row,
@@ -1017,6 +1030,7 @@ def run_truth_execution(
                             ),
                         )
                         closed_rgb = _capture_rgb(scene)
+                        _gui_pause()
                         if (
                             stage is TruthExecutionStage.LIFT_HOLD
                             and gripper_result.gate_passed
@@ -1057,6 +1071,7 @@ def run_truth_execution(
                                 lift_complete_callback=capture_lifted,
                             )
                             lift_hold_rgb = _capture_rgb(scene)
+                            _gui_pause()
 
     if stage in (
         TruthExecutionStage.CLOSE_CONTACT,
@@ -1528,6 +1543,9 @@ def run_truth_execution(
             _write_rgb(output_dir / "lifted.png", lifted_rgb)
         if lift_hold_rgb is not None:
             _write_rgb(output_dir / "lift_hold.png", lift_hold_rgb)
+        if config.gui:
+            print("Simulation complete. Close the PyBullet window or press Ctrl+C to exit.")
+            time.sleep(300)
         return summary
 
     if stage is TruthExecutionStage.OPEN_APPROACH:

@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 import argparse
+import time
 import csv
 import json
 import math
@@ -289,6 +290,10 @@ def _build_metadata(
 def run_stage6b(config: Stage6BConfig) -> dict[str, object]:
     """Load a frozen execution plan and drive the full perception grasp chain."""
 
+    def _pause(sec: float = 4.0) -> None:
+        if config.gui:
+            time.sleep(sec)
+
     # -- 1. Load and validate plan -------------------------------------------
     output_dir = Path(config.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -481,7 +486,11 @@ def run_stage6b(config: Stage6BConfig) -> dict[str, object]:
 
         # -- 8. Execute motions ----------------------------------------------
         motion_start_target_position = _target_position(cube_id, scene.client_id)
-        motion_config = MotionConfig(joint_tolerance_rad=0.002)
+        motion_config = MotionConfig(
+            steps_per_segment=1920,
+            settle_steps=960,
+            joint_tolerance_rad=0.002,
+        )
 
         # 8a. pregrasp
         pregrasp_execution = execute_joint_motion(
@@ -495,6 +504,7 @@ def run_stage6b(config: Stage6BConfig) -> dict[str, object]:
             config=motion_config,
         )
         pregrasp_rgb = _capture_rgb(scene)
+        _pause()
 
         if not pregrasp_execution.gate_passed:
             return _write_failure(
@@ -545,6 +555,7 @@ def run_stage6b(config: Stage6BConfig) -> dict[str, object]:
             config=motion_config,
         )
         approach_rgb = _capture_rgb(scene)
+        _pause()
 
         if not approach_execution.gate_passed:
             return _write_failure(
@@ -620,6 +631,7 @@ def run_stage6b(config: Stage6BConfig) -> dict[str, object]:
             config=motion_config,
         )
         grasp_depth_rgb = _capture_rgb(scene)
+        _pause()
 
         if not grasp_depth_execution.gate_passed:
             return _write_failure(
@@ -703,6 +715,7 @@ def run_stage6b(config: Stage6BConfig) -> dict[str, object]:
             allowed_environment_link_pairs=allowed_mounting_pair,
         )
         closed_rgb = _capture_rgb(scene)
+        _pause()
 
         if not gripper_result.gate_passed:
             return _write_failure(
@@ -754,6 +767,7 @@ def run_stage6b(config: Stage6BConfig) -> dict[str, object]:
             lift_complete_callback=capture_lifted,
         )
         lift_hold_rgb = _capture_rgb(scene)
+        _pause()
 
         # -- 9. Gate audit ---------------------------------------------------
         grasp_depth_height_above_cube_top = (
@@ -1014,6 +1028,10 @@ def run_stage6b(config: Stage6BConfig) -> dict[str, object]:
             },
         )
         _write_json(output_dir / "metadata.json", metadata)
+
+        if config.gui:
+            print("Simulation complete. Close the PyBullet window or press Ctrl+C to exit.")
+            time.sleep(300)  # keep alive for 5 minutes
 
         return summary
 

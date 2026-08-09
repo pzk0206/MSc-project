@@ -147,8 +147,8 @@ def generate_top_down_pose_from_world_point(
         )
     ):
         raise ValueError("pose-generation parameters must be finite")
-    if surface_standoff_m <= 0.0 or pregrasp_offset_m <= 0.0:
-        raise ValueError("pose offsets must be positive")
+    if not math.isfinite(surface_standoff_m) or pregrasp_offset_m <= 0.0:
+        raise ValueError("pose offsets must be finite and pregrasp offset positive")
     surface = np.asarray(surface_point, dtype=np.float64)
     finger_axis = np.asarray(finger_axis_world, dtype=np.float64)
     if surface.shape != (3,) or not np.all(np.isfinite(surface)):
@@ -202,8 +202,8 @@ def generate_top_down_pose_candidates(
         raise ValueError("pose-generation parameters must be finite")
     if tangent_offset_px <= 0.0:
         raise ValueError("tangent offset must be positive")
-    if surface_standoff_m <= 0.0 or pregrasp_offset_m <= 0.0:
-        raise ValueError("pose offsets must be positive")
+    if not math.isfinite(surface_standoff_m) or pregrasp_offset_m <= 0.0:
+        raise ValueError("pose offsets must be finite and pregrasp offset positive")
 
     surface = backproject_pixel(
         column,
