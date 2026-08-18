@@ -7,14 +7,18 @@ import pytest
 from src.simulation.pybullet import execution_plan as execution_plan_module
 from src.simulation.pybullet.execution_plan import (
     PROTOCOL_VERSION,
+    PROTOCOL_VERSION_OVERHEAD_MULTI_HEAD,
     CameraEvidence,
     FrozenControlProtocol,
     GeometryExecutionPlan,
+    OverheadDeepGraspControlProtocol,
     PerceptionExecutionPlan,
     PerceptionEvidence,
     PlannedPoseCandidate,
     load_geometry_execution_plan,
+    load_perception_execution_plan,
     write_geometry_execution_plan,
+    write_perception_execution_plan,
 )
 from src.simulation.pybullet.pose_generation import ToolPose
 
@@ -252,3 +256,79 @@ def test_overhead_side_grasp_protocol_encodes_its_pose_ladder() -> None:
 
     assert plan.control.approach_standoff_m == pytest.approx(-0.005)
     assert plan.control.grasp_depth_standoff_m == pytest.approx(-0.020)
+
+
+def _overhead_multi_head_plan() -> PerceptionExecutionPlan:
+    """Build a plan for the overhead multi-head deep-grasp protocol."""
+    base = _plan()
+    candidates = tuple(
+        replace(candidate, grasp_depth_pose=_pose(0.650))
+        for candidate in base.candidates
+    )
+    return PerceptionExecutionPlan(
+        protocol_version=PROTOCOL_VERSION_OVERHEAD_MULTI_HEAD,
+        scene_seed=base.scene_seed,
+        target_name=base.target_name,
+        backend="multi_head",
+        prompt=base.prompt,
+        model_id=base.model_id,
+        rgb_sha256=base.rgb_sha256,
+        camera=base.camera,
+        perception=base.perception,
+        control=OverheadDeepGraspControlProtocol(),
+        candidates=candidates,
+    )
+
+
+def test_overhead_multi_head_protocol_round_trips(
+    tmp_path: Path,
+) -> None:
+    """The overhead multi-head plan survives strict write/load."""
+
+    path = tmp_path / "execution_plan.json"
+    plan = _overhead_multi_head_plan()
+
+    write_perception_execution_plan(path, plan)
+
+    loaded = load_perception_execution_plan(path)
+    assert loaded == plan
+    assert loaded.backend == "multi_head"
+    assert loaded.control.grasp_depth_standoff_m == pytest.approx(-0.025)
+
+
+def test_overhead_multi_head_protocol_rejects_geometry_backend() -> None:
+    """The multi-head overhead protocol is bound to multi_head only."""
+
+    plan = _overhead_multi_head_plan()
+
+    with pytest.raises(ValueError, match="multi_head"):
+        replace(plan, backend="geometry")
+
+
+def test_overhead_geometry_protocol_still_rejects_multi_head() -> None:
+    """The geometry overhead protocol keeps rejecting multi_head plans."""
+
+    base = _plan()
+    candidates = tuple(
+        replace(candidate, grasp_depth_pose=_pose(0.650))
+        for candidate in base.candidates
+    )
+    plan = PerceptionExecutionPlan(
+        protocol_version=getattr(
+            execution_plan_module,
+            "PROTOCOL_VERSION_OVERHEAD",
+        ),
+        scene_seed=base.scene_seed,
+        target_name=base.target_name,
+        backend="geometry",
+        prompt=base.prompt,
+        model_id=base.model_id,
+        rgb_sha256=base.rgb_sha256,
+        camera=base.camera,
+        perception=base.perception,
+        control=OverheadDeepGraspControlProtocol(),
+        candidates=candidates,
+    )
+
+    with pytest.raises(ValueError, match="only supports geometry"):
+        replace(plan, backend="multi_head")

@@ -17,6 +17,9 @@ PROTOCOL_VERSION = "stage_6a_geometry_preflight_v1"
 PROTOCOL_VERSION_V2 = "stage_6a2_center_recovery_v1"
 PROTOCOL_VERSION_OVERHEAD = "stage_6a_overhead_deep_grasp_v1"
 PROTOCOL_VERSION_OVERHEAD_SIDE = "stage_6a_overhead_side_grasp_v1"
+PROTOCOL_VERSION_OVERHEAD_MULTI_HEAD = (
+    "stage_6a_overhead_deep_grasp_multi_head_v1"
+)
 
 VALID_BACKENDS = ("geometry", "multi_head")
 
@@ -462,6 +465,7 @@ class PerceptionExecutionPlan:
             PROTOCOL_VERSION_V2,
             PROTOCOL_VERSION_OVERHEAD,
             PROTOCOL_VERSION_OVERHEAD_SIDE,
+            PROTOCOL_VERSION_OVERHEAD_MULTI_HEAD,
         ):
             raise ValueError("unsupported protocol_version")
         if self.scene_seed != 42:
@@ -509,6 +513,21 @@ class PerceptionExecutionPlan:
             ):
                 raise ValueError(
                     "overhead protocol requires overhead deep-grasp control"
+                )
+        elif (
+            self.protocol_version == PROTOCOL_VERSION_OVERHEAD_MULTI_HEAD
+        ):
+            if self.backend != "multi_head":
+                raise ValueError(
+                    "overhead multi-head protocol only supports multi_head"
+                )
+            if not isinstance(
+                self.control,
+                OverheadDeepGraspControlProtocol,
+            ):
+                raise ValueError(
+                    "overhead multi-head protocol requires "
+                    "overhead deep-grasp control"
                 )
         elif self.protocol_version == PROTOCOL_VERSION_OVERHEAD_SIDE:
             if self.backend != "geometry":
@@ -719,11 +738,15 @@ def load_perception_execution_plan(path: Path) -> PerceptionExecutionPlan:
         PROTOCOL_VERSION_V2,
         PROTOCOL_VERSION_OVERHEAD,
         PROTOCOL_VERSION_OVERHEAD_SIDE,
+        PROTOCOL_VERSION_OVERHEAD_MULTI_HEAD,
     ):
         raise ValueError(f"unsupported protocol_version: {protocol}")
     control_value = value["control"]
     control_types = {
         PROTOCOL_VERSION_OVERHEAD: OverheadDeepGraspControlProtocol,
+        PROTOCOL_VERSION_OVERHEAD_MULTI_HEAD: (
+            OverheadDeepGraspControlProtocol
+        ),
         PROTOCOL_VERSION_OVERHEAD_SIDE: OverheadSideGraspControlProtocol,
     }
     control_type = control_types.get(protocol, FrozenControlProtocol)
