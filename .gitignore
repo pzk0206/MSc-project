@@ -27,14 +27,14 @@ env/
 Thumbs.db
 .vscode/
 
-# LaTeX 编译产物
-uog_dissertation_outline/*.aux
-uog_dissertation_outline/*.bbl
-uog_dissertation_outline/*.blg
-uog_dissertation_outline/*.log
-uog_dissertation_outline/*.out
-uog_dissertation_outline/*.toc
-uog_dissertation_outline/l4proj.pdf
-
-# 论文导出目录
+# 内部文档（不在公开仓库中）
+docs/
+uog_dissertation_outline/
 thesis_export/
+AGENTS.md
+CLAUDE.md
+
+# 导师汇报材料
+supervisor_progress_update_*.pdf
+supervisor_progress_update_*.pptx
+supervisor_progress_update_*.md
