@@ -1,13 +1,16 @@
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
+from src.simulation.pybullet import execution_plan as execution_plan_module
 from src.simulation.pybullet.execution_plan import (
     PROTOCOL_VERSION,
     CameraEvidence,
     FrozenControlProtocol,
     GeometryExecutionPlan,
+    PerceptionExecutionPlan,
     PerceptionEvidence,
     PlannedPoseCandidate,
     load_geometry_execution_plan,
@@ -66,7 +69,7 @@ def _plan() -> GeometryExecutionPlan:
         angle_degrees=0.0,
         sampled_pixel=(321, 217),
         depth_m=0.6838,
-        world_surface_point=(0.5064, 0.0022, 0.6755),
+        world_surface_point=(0.5064, 0.0022, 0.675),
         target_selection_passed=True,
         backend_geometry_passed=True,
         backprojection_gate_passed=True,
@@ -156,3 +159,96 @@ def test_geometry_execution_plan_rejects_tampering(
 def test_frozen_control_protocol_rejects_changed_thresholds() -> None:
     with pytest.raises(ValueError, match="frozen control protocol"):
         FrozenControlProtocol(tool_lift_command_m=0.11)
+
+
+def test_plan_rejects_grasp_pose_that_disagrees_with_declared_control() -> None:
+    """Catch serializing a -25 mm pose as the frozen +5 mm protocol."""
+
+    plan = _plan()
+    mismatched = replace(
+        plan.candidates[0],
+        grasp_depth_pose=_pose(0.650),
+    )
+
+    with pytest.raises(ValueError, match="control alignment"):
+        replace(plan, candidates=(mismatched, plan.candidates[1]))
+
+
+def test_overhead_deep_grasp_protocol_encodes_negative_standoff() -> None:
+    protocol_type = getattr(
+        execution_plan_module,
+        "OverheadDeepGraspControlProtocol",
+        None,
+    )
+    protocol_version = getattr(
+        execution_plan_module,
+        "PROTOCOL_VERSION_OVERHEAD",
+        None,
+    )
+    assert protocol_type is not None
+    assert protocol_version == "stage_6a_overhead_deep_grasp_v1"
+
+    base = _plan()
+    candidates = tuple(
+        replace(candidate, grasp_depth_pose=_pose(0.650))
+        for candidate in base.candidates
+    )
+    plan = PerceptionExecutionPlan(
+        protocol_version=protocol_version,
+        scene_seed=base.scene_seed,
+        target_name=base.target_name,
+        backend=base.backend,
+        prompt=base.prompt,
+        model_id=base.model_id,
+        rgb_sha256=base.rgb_sha256,
+        camera=base.camera,
+        perception=base.perception,
+        control=protocol_type(),
+        candidates=candidates,
+    )
+
+    assert plan.control.grasp_depth_standoff_m == pytest.approx(-0.025)
+
+
+def test_overhead_side_grasp_protocol_encodes_its_pose_ladder() -> None:
+    """Keep the older side-grasp runner loadable under strict validation."""
+
+    protocol_type = getattr(
+        execution_plan_module,
+        "OverheadSideGraspControlProtocol",
+        None,
+    )
+    protocol_version = getattr(
+        execution_plan_module,
+        "PROTOCOL_VERSION_OVERHEAD_SIDE",
+        None,
+    )
+    assert protocol_type is not None
+    assert protocol_version == "stage_6a_overhead_side_grasp_v1"
+
+    base = _plan()
+    candidates = tuple(
+        replace(
+            candidate,
+            pregrasp_pose=_pose(0.770),
+            approach_pose=_pose(0.670),
+            grasp_depth_pose=_pose(0.655),
+        )
+        for candidate in base.candidates
+    )
+    plan = PerceptionExecutionPlan(
+        protocol_version=protocol_version,
+        scene_seed=base.scene_seed,
+        target_name=base.target_name,
+        backend=base.backend,
+        prompt=base.prompt,
+        model_id=base.model_id,
+        rgb_sha256=base.rgb_sha256,
+        camera=base.camera,
+        perception=base.perception,
+        control=protocol_type(),
+        candidates=candidates,
+    )
+
+    assert plan.control.approach_standoff_m == pytest.approx(-0.005)
+    assert plan.control.grasp_depth_standoff_m == pytest.approx(-0.020)

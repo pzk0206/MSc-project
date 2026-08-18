@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import csv
 import dataclasses
+import hashlib
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -136,6 +137,7 @@ class _Recorder:
     def __init__(self) -> None:
         self.motion_segments: list[tuple[str, tuple[float, ...]]] = []
         self.lift_arm_positions: tuple[float, ...] | None = None
+        self.camera_configs: list[object] = []
 
 
 def _motion_row(phase: str, pose: object, arm: tuple[float, ...]) -> object:
@@ -194,6 +196,10 @@ def _tolerant_write_trace(path: Path, rows: list[dict[str, object]]) -> None:
 def _install_fakes(
     monkeypatch: pytest.MonkeyPatch,
     candidate: object,
+    *,
+    cube_top_offset_m: float = 0.0,
+    minimum_object_lift_m: float = 0.11,
+    object_lift_gate_passed: bool = True,
 ) -> _Recorder:
     """Patch the Stage 6B module's heavy dependencies with deterministic fakes.
 
@@ -219,6 +225,7 @@ def _install_fakes(
         config: object,
         renderer: int,
     ) -> object:
+        recorder.camera_configs.append(config)
         return SimpleNamespace(
             rgb=np.zeros((480, 640, 3), dtype=np.uint8),
         )
@@ -238,10 +245,13 @@ def _install_fakes(
             _CUBE_POSITION[1] - 0.05,
             _CUBE_POSITION[2] - 0.02,
         )
+        planned_surface_z = (
+            float(candidate.grasp_depth_pose.position[2]) - 0.005
+        )
         high = (
             _CUBE_POSITION[0] + 0.05,
             _CUBE_POSITION[1] + 0.05,
-            _CUBE_POSITION[2] + 0.02,
+            planned_surface_z + cube_top_offset_m,
         )
         return (low, high)
 
@@ -329,7 +339,7 @@ def _install_fakes(
             ),
             left_normal_force=6.0,
             right_normal_force=6.0,
-            target_lift_m=0.11,
+            target_lift_m=minimum_object_lift_m,
             target_table_contact=False,
             relative_drift_m=0.0,
             environment_collision_count=0,
@@ -346,9 +356,10 @@ def _install_fakes(
                     normal_force=6.0,
                 ),
             ),
-            gate_passed=True,
-            minimum_hold_object_lift_m=0.11,
-            final_object_lift_m=0.11,
+            gate_passed=object_lift_gate_passed,
+            object_lift_gate_passed=object_lift_gate_passed,
+            minimum_hold_object_lift_m=minimum_object_lift_m,
+            final_object_lift_m=minimum_object_lift_m,
             total_target_table_contact_count=0,
             maximum_hold_relative_drift_m=0.0,
             trailing_bilateral_contact_steps=10,
@@ -588,6 +599,7 @@ class TestStage6BExecution:
         assert summary["pregrasp_dynamic_gate"] is True
         assert summary["approach_dynamic_gate"] is True
         assert summary["grasp_depth_dynamic_gate"] is True
+        assert summary["grasp_depth_height_gate_passed"] is True
         assert summary["gripper_gate_passed"] is True
         assert summary["lift_gate_passed"] is True
         assert summary["bilateral_contact_acquired"] is True
@@ -636,6 +648,13 @@ class TestStage6BExecution:
         # -- The summary written to disk must match the returned summary -----
         written = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
         assert written == summary
+        metadata = json.loads(
+            (output_dir / "metadata.json").read_text(encoding="utf-8")
+        )
+        assert metadata["plan_file_sha256"] == hashlib.sha256(before).hexdigest()
+        assert metadata["execution_start_rgb_sha256"] == hashlib.sha256(
+            (output_dir / "start.png").read_bytes()
+        ).hexdigest()
 
     @_REQUIRES_REAL_PLAN
     def test_plan_file_unchanged_after_run(
@@ -657,3 +676,123 @@ class TestStage6BExecution:
         )
 
         assert plan_path.read_bytes() == before
+
+    @_REQUIRES_REAL_PLAN
+    def test_execution_images_use_the_plan_camera(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _lazy_imports()
+        plan_path = _write_normalized_plan(tmp_path)
+        payload = json.loads(plan_path.read_text(encoding="utf-8"))
+        payload["camera"].update(
+            eye=[0.5, 0.0, 1.3],
+            target=[0.5, 0.0, 0.62],
+            up=[0.0, 1.0, 0.0],
+        )
+        plan_path.write_text(json.dumps(payload), encoding="utf-8")
+        plan = _load_geometry_execution_plan(plan_path)
+        recorder = _install_fakes(
+            monkeypatch,
+            _selected_candidate(plan),
+        )
+
+        _run_stage6b(
+            _Stage6BConfig(
+                plan_path=plan_path,
+                output_dir=tmp_path / "out",
+            )
+        )
+
+        assert len(recorder.camera_configs) == 7
+        assert all(
+            tuple(config.eye) == tuple(plan.camera.eye)
+            and tuple(config.target) == tuple(plan.camera.target)
+            and tuple(config.up) == tuple(plan.camera.up)
+            for config in recorder.camera_configs
+        )
+
+    @_REQUIRES_REAL_PLAN
+    def test_truth_height_mismatch_fails_the_scientific_gate(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _lazy_imports()
+        plan_path = _write_normalized_plan(tmp_path)
+        plan = _load_geometry_execution_plan(plan_path)
+        _install_fakes(
+            monkeypatch,
+            _selected_candidate(plan),
+            cube_top_offset_m=0.01,
+        )
+
+        summary = _run_stage6b(
+            _Stage6BConfig(
+                plan_path=plan_path,
+                output_dir=tmp_path / "out",
+            )
+        )
+
+        assert summary["grasp_depth_dynamic_gate"] is True
+        assert summary["grasp_depth_height_error_m"] == pytest.approx(0.01)
+        assert summary["grasp_depth_height_gate_passed"] is False
+        assert summary["scientific_gate_passed"] is False
+
+    @_REQUIRES_REAL_PLAN
+    def test_subthreshold_lift_is_not_marked_as_object_lifted(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _lazy_imports()
+        plan_path = _write_normalized_plan(tmp_path)
+        plan = _load_geometry_execution_plan(plan_path)
+        _install_fakes(
+            monkeypatch,
+            _selected_candidate(plan),
+            minimum_object_lift_m=0.001,
+            object_lift_gate_passed=False,
+        )
+        output_dir = tmp_path / "out"
+
+        _run_stage6b(
+            _Stage6BConfig(plan_path=plan_path, output_dir=output_dir)
+        )
+
+        metadata = json.loads(
+            (output_dir / "metadata.json").read_text(encoding="utf-8")
+        )
+        assert metadata["object_lifted"] is False
+
+    @_REQUIRES_REAL_PLAN
+    def test_failure_summary_keeps_plan_and_start_image_hashes(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        _lazy_imports()
+        from src.simulation.pybullet.run_stage6b_pipeline import (
+            _write_failure,
+        )
+
+        plan_path = _write_normalized_plan(tmp_path)
+        plan = _load_geometry_execution_plan(plan_path)
+        output_dir = tmp_path / "out"
+
+        summary = _write_failure(
+            output_dir,
+            _Stage6BConfig(plan_path=plan_path, output_dir=output_dir),
+            plan,
+            _selected_candidate(plan),
+            np.zeros((8, 8, 3), dtype=np.uint8),
+            "pregrasp",
+        )
+
+        assert summary["plan_file_sha256"] == hashlib.sha256(
+            plan_path.read_bytes()
+        ).hexdigest()
+        assert summary["execution_start_rgb_sha256"] == hashlib.sha256(
+            (output_dir / "start.png").read_bytes()
+        ).hexdigest()
+        assert summary["execution_start_rgb_matches_plan"] is False

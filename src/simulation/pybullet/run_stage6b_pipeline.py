@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 import argparse
+import hashlib
 import time
 import csv
 import json
@@ -28,7 +29,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.simulation.pybullet.camera import CameraConfig, capture_camera_frame
 from src.simulation.pybullet.execution_plan import (
-    FrozenControlProtocol,
+    CameraEvidence,
     PerceptionExecutionPlan,
     PlannedPoseCandidate,
     load_perception_execution_plan,
@@ -126,10 +127,26 @@ def _initialize_neutral_open(
     p.performCollisionDetection(physicsClientId=client_id)
 
 
-def _capture_rgb(scene: PyBulletScene) -> np.ndarray:
+def _camera_config(evidence: CameraEvidence) -> CameraConfig:
+    return CameraConfig(
+        width=evidence.width,
+        height=evidence.height,
+        eye=evidence.eye,
+        target=evidence.target,
+        up=evidence.up,
+        fov_degrees=evidence.fov_degrees,
+        near=evidence.near,
+        far=evidence.far,
+    )
+
+
+def _capture_rgb(
+    scene: PyBulletScene,
+    camera: CameraEvidence,
+) -> np.ndarray:
     return capture_camera_frame(
         scene.client_id,
-        CameraConfig(),
+        _camera_config(camera),
         scene.renderer,
     ).rgb
 
@@ -138,6 +155,14 @@ def _write_rgb(path: Path, rgb: np.ndarray) -> None:
     bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
     if not cv2.imwrite(str(path), bgr):
         raise OSError(f"failed to write stage image: {path}")
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 class _JsonEncoder(json.JSONEncoder):
@@ -266,6 +291,7 @@ def _build_metadata(
         "protocol": "stage_6b_perception_grasp_v1",
         "plan_protocol": plan.protocol_version,
         "plan_path": str(config.plan_path),
+        "plan_file_sha256": _sha256_file(config.plan_path),
         "plan_rgb_sha256": plan.rgb_sha256,
         "config": {
             "output_dir": str(config.output_dir),
@@ -332,7 +358,7 @@ def run_stage6b(config: Stage6BConfig) -> dict[str, object]:
             neutral,
         )
 
-        start_rgb = _capture_rgb(scene)
+        start_rgb = _capture_rgb(scene, plan.camera)
         cube_id = scene.object_body_ids[config.plan_path.name] if False else (
             scene.object_body_ids.get("cube", -1)
         )
@@ -503,7 +529,7 @@ def run_stage6b(config: Stage6BConfig) -> dict[str, object]:
             tracked_body_ids=(cube_id,),
             config=motion_config,
         )
-        pregrasp_rgb = _capture_rgb(scene)
+        pregrasp_rgb = _capture_rgb(scene, plan.camera)
         _pause()
 
         if not pregrasp_execution.gate_passed:
@@ -554,7 +580,7 @@ def run_stage6b(config: Stage6BConfig) -> dict[str, object]:
             tracked_body_ids=(cube_id,),
             config=motion_config,
         )
-        approach_rgb = _capture_rgb(scene)
+        approach_rgb = _capture_rgb(scene, plan.camera)
         _pause()
 
         if not approach_execution.gate_passed:
@@ -630,7 +656,7 @@ def run_stage6b(config: Stage6BConfig) -> dict[str, object]:
             tracked_body_ids=(cube_id,),
             config=motion_config,
         )
-        grasp_depth_rgb = _capture_rgb(scene)
+        grasp_depth_rgb = _capture_rgb(scene, plan.camera)
         _pause()
 
         if not grasp_depth_execution.gate_passed:
@@ -714,7 +740,7 @@ def run_stage6b(config: Stage6BConfig) -> dict[str, object]:
             ),
             allowed_environment_link_pairs=allowed_mounting_pair,
         )
-        closed_rgb = _capture_rgb(scene)
+        closed_rgb = _capture_rgb(scene, plan.camera)
         _pause()
 
         if not gripper_result.gate_passed:
@@ -741,7 +767,7 @@ def run_stage6b(config: Stage6BConfig) -> dict[str, object]:
 
         def capture_lifted() -> None:
             nonlocal lifted_rgb
-            lifted_rgb = _capture_rgb(scene)
+            lifted_rgb = _capture_rgb(scene, plan.camera)
 
         lift_config = LiftConfig()
         lift_result = execute_object_lift(
@@ -766,7 +792,7 @@ def run_stage6b(config: Stage6BConfig) -> dict[str, object]:
             config=lift_config,
             lift_complete_callback=capture_lifted,
         )
-        lift_hold_rgb = _capture_rgb(scene)
+        lift_hold_rgb = _capture_rgb(scene, plan.camera)
         _pause()
 
         # -- 9. Gate audit ---------------------------------------------------
@@ -776,6 +802,9 @@ def run_stage6b(config: Stage6BConfig) -> dict[str, object]:
         grasp_depth_height_error = abs(
             grasp_depth_height_above_cube_top
             - plan.control.grasp_depth_standoff_m
+        )
+        grasp_depth_height_gate_passed = bool(
+            grasp_depth_height_error <= POSITION_ERROR_THRESHOLD_M
         )
 
         # XY bias: where the tool actually ended up vs cube true center
@@ -811,6 +840,7 @@ def run_stage6b(config: Stage6BConfig) -> dict[str, object]:
             pregrasp_dynamic_gate
             and approach_dynamic_gate
             and grasp_depth_dynamic_gate
+            and grasp_depth_height_gate_passed
             and gripper_result.gate_passed
             and lift_result.gate_passed
         )
@@ -952,6 +982,7 @@ def run_stage6b(config: Stage6BConfig) -> dict[str, object]:
         if lifted_rgb is not None:
             _write_rgb(output_dir / "lifted.png", lifted_rgb)
         _write_rgb(output_dir / "lift_hold.png", lift_hold_rgb)
+        execution_start_rgb_sha256 = _sha256_file(output_dir / "start.png")
 
         _write_trace(output_dir / "state_trace.csv", merged_trace)
         _write_contact_events(output_dir / "contact_events.csv", contact_events)
@@ -959,7 +990,12 @@ def run_stage6b(config: Stage6BConfig) -> dict[str, object]:
         summary: dict[str, object] = {
             "protocol": "stage_6b_perception_grasp_v1",
             "plan_protocol": plan.protocol_version,
+            "plan_file_sha256": _sha256_file(config.plan_path),
             "plan_rgb_sha256": plan.rgb_sha256,
+            "execution_start_rgb_sha256": execution_start_rgb_sha256,
+            "execution_start_rgb_matches_plan": (
+                execution_start_rgb_sha256 == plan.rgb_sha256
+            ),
             "backend": plan.backend,
             "target_name": plan.target_name,
             "perception_world_surface_point": list(
@@ -981,6 +1017,9 @@ def run_stage6b(config: Stage6BConfig) -> dict[str, object]:
             "grasp_depth_orientation_error_deg": grasp_orientation_error,
             "grasp_depth_height_above_cube_top_m": grasp_depth_height_above_cube_top,
             "grasp_depth_height_error_m": grasp_depth_height_error,
+            "grasp_depth_height_gate_passed": (
+                grasp_depth_height_gate_passed
+            ),
             "bilateral_contact_acquired": gripper_result.bilateral_contact_acquired,
             "first_bilateral_contact_step": gripper_result.first_bilateral_contact_step,
             "contact_hold_steps": (
@@ -1019,8 +1058,12 @@ def run_stage6b(config: Stage6BConfig) -> dict[str, object]:
                 "trajectory_executed": True,
                 "gripper_closed": True,
                 "contact_evaluated": True,
-                "object_lifted": lift_result.minimum_hold_object_lift_m > 0.0,
+                "object_lifted": lift_result.object_lift_gate_passed,
                 "physical_grasp_executed": True,
+                "execution_start_rgb_sha256": execution_start_rgb_sha256,
+                "execution_start_rgb_matches_plan": (
+                    execution_start_rgb_sha256 == plan.rgb_sha256
+                ),
                 "perception_used": True,
                 "perception_world_surface_point": list(
                     plan.perception.world_surface_point
@@ -1048,6 +1091,7 @@ def _write_failure(
     """Write minimal failure artifacts and return a failure summary."""
     output_dir.mkdir(parents=True, exist_ok=True)
     _write_rgb(output_dir / "start.png", start_rgb)
+    execution_start_rgb_sha256 = _sha256_file(output_dir / "start.png")
     # Write any extra RGB images passed as kwargs
     for key, value in list(extra.items()):
         if isinstance(value, np.ndarray) and key.endswith("_rgb"):
@@ -1061,6 +1105,12 @@ def _write_failure(
     summary: dict[str, object] = {
         "protocol": "stage_6b_perception_grasp_v1",
         "plan_protocol": plan.protocol_version,
+        "plan_file_sha256": _sha256_file(config.plan_path),
+        "plan_rgb_sha256": plan.rgb_sha256,
+        "execution_start_rgb_sha256": execution_start_rgb_sha256,
+        "execution_start_rgb_matches_plan": (
+            execution_start_rgb_sha256 == plan.rgb_sha256
+        ),
         "status": "failure",
         "failure_stage": failure_stage,
         "scientific_gate_passed": False,
@@ -1076,6 +1126,10 @@ def _write_failure(
             "failure_stage": failure_stage,
             "scientific_gate_passed": False,
             "physical_grasp_executed": False,
+            "execution_start_rgb_sha256": execution_start_rgb_sha256,
+            "execution_start_rgb_matches_plan": (
+                execution_start_rgb_sha256 == plan.rgb_sha256
+            ),
         },
     )
     _write_json(output_dir / "metadata.json", metadata)

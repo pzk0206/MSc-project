@@ -52,11 +52,11 @@ from src.simulation.pybullet.camera import (
 )
 from src.simulation.pybullet.execution_plan import (
     CameraEvidence,
-    FrozenControlProtocol,
+    OverheadDeepGraspControlProtocol,
     PerceptionEvidence,
     PerceptionExecutionPlan,
     PlannedPoseCandidate,
-    PROTOCOL_VERSION_V2,
+    PROTOCOL_VERSION_OVERHEAD,
     write_perception_execution_plan,
 )
 from src.simulation.pybullet.kinematic_audit import (
@@ -213,7 +213,7 @@ def _prepare_output(output_dir: Path) -> None:
 def _base_metadata(config: OverheadPreflightConfig) -> dict[str, Any]:
     return {
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
-        "protocol": PROTOCOL_VERSION_V2,
+        "protocol": PROTOCOL_VERSION_OVERHEAD,
         "center_recovery_applied": False,
         "backprojection_method": "single_pixel_nearest_depth",
         "config": asdict(config),
@@ -506,7 +506,7 @@ def run_overhead_preflight(
             view_matrix=frame.view_matrix,
             projection_matrix=frame.projection_matrix,
         )
-        control = FrozenControlProtocol()
+        control = OverheadDeepGraspControlProtocol()
 
         # --- predict 2-D grasp (geometry backend, no model) ---------------
         image_bgr = cv2.cvtColor(frame.rgb, cv2.COLOR_RGB2BGR)
@@ -789,7 +789,7 @@ def run_overhead_preflight(
 
         # --- write plan --------------------------------------------------
         plan = PerceptionExecutionPlan(
-            protocol_version=PROTOCOL_VERSION_V2,
+            protocol_version=PROTOCOL_VERSION_OVERHEAD,
             scene_seed=config.seed,
             target_name=config.target_name,
             backend=BACKEND,
@@ -808,7 +808,7 @@ def run_overhead_preflight(
 
         selected = next(row for row in audits if row.selected)
         summary: dict[str, object] = {
-            "protocol": PROTOCOL_VERSION_V2,
+            "protocol": PROTOCOL_VERSION_OVERHEAD,
             "center_recovery_applied": False,
             "backprojection_method": "single_pixel_nearest_depth",
             "status": "success",
@@ -885,7 +885,7 @@ def _failure(
     details: Mapping[str, Any] | None = None,
 ) -> dict[str, object]:
     summary: dict[str, object] = {
-        "protocol": PROTOCOL_VERSION_V2,
+        "protocol": PROTOCOL_VERSION_OVERHEAD,
         "center_recovery_applied": False,
         "backprojection_method": "single_pixel_nearest_depth",
         "status": "failed",

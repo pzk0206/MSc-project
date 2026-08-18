@@ -7,7 +7,7 @@
 [Bullet Physics / PyBullet 官方项目](https://github.com/bulletphysics/bullet3)
 及其随包资源。这里没有复制或改编外部抓取执行代码。
 
-## 九种运行方式
+## 主要运行方式
 
 单物体感知诊断：
 
@@ -106,8 +106,8 @@ conda run -n msc-grasp python \
 该命令完整重放阶段 2--4，在双指接触门控通过后冻结最终夹爪命令，使工具沿
 世界 Z 上升 `0.12 m`。240 个插值步后最多使用 240 个 settle 步达到既定
 `0.01 rad` 关节终点门槛，再完整保持 240 步。正式运行使用 2 个 settle 步；
-保持段 cube 最小/最终上升量为 `0.116738 m/0.120003 m`，桌面接触为零，
-最大末端—cube 相对漂移为 `0.001410 m`。closed、lifted、lift-hold 图已人工
+保持段 cube 最小/最终上升量为 `0.116735 m/0.120005 m`，保持段桌面接触为零
+（全程 1 次），最大末端—cube 相对漂移为 `0.002142 m`。closed、lifted、lift-hold 图已人工
 确认方块被双指夹持、离桌并保持。该结果是一例真值姿态仿真抓取成功，不是
 geometry 或 CNN 感知后端成功率。
 
@@ -159,6 +159,44 @@ metadata；三个成功产物先写临时文件再发布，失败 CLI 返回非�
 `stage_6a1_center_bias_reproducibility/`。其 RGB 哈希、定位、世界表面点和
 全部中心偏差数值与正式运行一致；该结果只证明当前固定协议可重复，不修改原
 计划，也不构成抓取成功。
+
+Stage 6B 严格执行计划消费：
+
+```bash
+conda run -n msc-grasp python \
+  src/simulation/pybullet/run_stage6b_pipeline.py \
+  --plan-path \
+  data/processed/pybullet/grasp_execution/stage_6a_geometry_preflight/execution_plan.json \
+  --output-dir \
+  data/processed/pybullet/grasp_execution/stage_6b_perception_grasp
+```
+
+Stage 6B 现在使用计划中保存的相机拍摄所有执行图像，并在 summary/metadata
+记录计划文件及执行起始 RGB 的 SHA-256。计划声明的 surface standoff 必须与
+候选 approach、grasp-depth、pregrasp 高度逐项一致；实际抓取深度高度误差也
+进入科学门控。`object_lifted` 只有达到 `minimum_object_lift_m` 才为真。
+
+头顶相机 + `-25 mm` 深抓取使用独立协议，必须重新生成后再显式消费：
+
+```bash
+conda run -n msc-grasp python \
+  src/simulation/pybullet/run_overhead_preflight.py \
+  --device cuda \
+  --output-dir \
+  data/processed/pybullet/grasp_execution/stage_overhead_preflight_strict
+
+conda run -n msc-grasp python \
+  src/simulation/pybullet/run_stage6b_pipeline.py \
+  --plan-path \
+  data/processed/pybullet/grasp_execution/stage_overhead_preflight_strict/execution_plan.json \
+  --output-dir \
+  data/processed/pybullet/grasp_execution/stage_overhead_grasp_strict
+```
+
+新计划协议应为 `stage_6a_overhead_deep_grasp_v1`，并明确声明
+`approach=+0.020 m`、`grasp_depth=-0.025 m`、`pregrasp_offset=+0.100 m`。
+旧顶视产物把负抓取深度写成冻结 `+0.005 m` 控制，严格加载器会拒绝它；它们
+只保留为历史证据，不能作为新协议运行结果。
 
 上述静态审计命令为每条二维抓取生成 `0°/180°` 两个世界 `-Z` 俯视候选，检查 Panda
 七关节 IK、`5 mm/5°` FK 误差和 `2 mm` 碰撞余量。两段关节插值各采样
@@ -285,12 +323,15 @@ backend_comparison.png
 
 ## 当前边界
 
-本模块已经实现二维抓取中心反投影、确定性六自由度悬停姿态、离线 IK/FK、
-离散碰撞余量审计、阶段 1 安全空中电机往返、阶段 2 真值方块上方 pregrasp，
-阶段 3 张开夹爪的接触前垂直接近、阶段 4 的开放夹爪短下探与双指接触，以及
-阶段 5 的真值方块抬升和保持、Stage 6A 的 VLM + geometry 同场景感知与静态
-执行计划预检，以及 Stage 6A.1 的冻结产物离线中心偏差诊断。阶段 1--5 已支持
-一例真值姿态仿真抓取成功判定；Stage 6A/6A.1 均未驱动机械臂，且已确认原始
-表面点不满足 `5 mm` XY 中心参考。多头 CNN 也尚未接入，因此当前仍没有感知
-后端仿真抓取成功率。下一步必须先冻结“原样执行”或“为两个后端共同修订中心
-恢复规则”的选择，再进入 Stage 6B。
+本模块已经实现二维中心反投影、姿态与 IK/FK/碰撞审计、阶段 1--5 真值控制链、
+Stage 6A 感知计划以及 Stage 6B 完整执行。阶段 1--5 支持一例真值姿态仿真
+抓取成功；geometry 与 multi-head 的历史斜视 pilot 均在抬升阶段失败。历史
+顶视运行把相机和抓取深度一起改变并成功抬升，因此只能证明联合配置的固定
+场景可行性，不能称为相机单因素对照。
+
+当前代码已冻结三种可区分的控制契约：原始 `+5 mm` 协议、顶视
+`-25 mm` deep-grasp 协议，以及旧 side-grasp 的 `-5/-20 mm` 位姿阶梯；计划
+与位姿不一致会在加载和执行前失败。尚未完成的是：新严格顶视协议的 GPU
+preflight/Stage 6B 重跑、`斜视/顶视 × +5/-25 mm` 的 $2\times2$ 因果消融、
+geometry/multi-head 同控制配对重跑，以及预定的 `3×2×10=60` 次正式试验。
+在这些完成前不报告感知后端仿真抓取成功率。

@@ -56,9 +56,9 @@ def _candidate(symmetry: float, selected: bool) -> PlannedPoseCandidate:
     return PlannedPoseCandidate(
         symmetry_degrees=symmetry,
         finger_axis_world=(1.0, 0.0, 0.0),
-        pregrasp_pose=_pose(0.795),
-        approach_pose=_pose(0.695),
-        grasp_depth_pose=_pose(0.680),
+        pregrasp_pose=_pose(0.7954779706501471),
+        approach_pose=_pose(0.6954779706501471),
+        grasp_depth_pose=_pose(0.6804779706501471),
         pregrasp_ik=(0.0,) * 7,
         approach_ik=(0.1,) * 7,
         grasp_depth_ik=(0.2,) * 7,

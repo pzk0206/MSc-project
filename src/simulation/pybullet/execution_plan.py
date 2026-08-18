@@ -15,6 +15,8 @@ from src.simulation.pybullet.pose_generation import ToolPose
 
 PROTOCOL_VERSION = "stage_6a_geometry_preflight_v1"
 PROTOCOL_VERSION_V2 = "stage_6a2_center_recovery_v1"
+PROTOCOL_VERSION_OVERHEAD = "stage_6a_overhead_deep_grasp_v1"
+PROTOCOL_VERSION_OVERHEAD_SIDE = "stage_6a_overhead_side_grasp_v1"
 
 VALID_BACKENDS = ("geometry", "multi_head")
 
@@ -70,6 +72,87 @@ class FrozenControlProtocol:
         actual = tuple(getattr(self, field.name) for field in fields(self))
         if actual != expected:
             raise ValueError("frozen control protocol values cannot change")
+
+
+@dataclass(frozen=True)
+class OverheadDeepGraspControlProtocol:
+    """Explicit amended control used by the overhead deep-grasp pilot."""
+
+    approach_standoff_m: float = 0.02
+    grasp_depth_standoff_m: float = -0.025
+    pregrasp_offset_m: float = 0.10
+    collision_clearance_m: float = 0.002
+    samples_per_segment: int = 21
+    tool_lift_command_m: float = 0.12
+    minimum_object_lift_m: float = 0.10
+    lift_hold_steps: int = 240
+
+    def __post_init__(self) -> None:
+        expected = (0.02, -0.025, 0.10, 0.002, 21, 0.12, 0.10, 240)
+        actual = tuple(getattr(self, field.name) for field in fields(self))
+        if actual != expected:
+            raise ValueError(
+                "overhead deep-grasp control protocol values cannot change"
+            )
+
+
+@dataclass(frozen=True)
+class OverheadSideGraspControlProtocol:
+    """Explicit pose ladder used by the earlier overhead side-grasp pilot."""
+
+    approach_standoff_m: float = -0.005
+    grasp_depth_standoff_m: float = -0.020
+    pregrasp_offset_m: float = 0.10
+    collision_clearance_m: float = 0.002
+    samples_per_segment: int = 21
+    tool_lift_command_m: float = 0.12
+    minimum_object_lift_m: float = 0.10
+    lift_hold_steps: int = 240
+
+    def __post_init__(self) -> None:
+        expected = (-0.005, -0.020, 0.10, 0.002, 21, 0.12, 0.10, 240)
+        actual = tuple(getattr(self, field.name) for field in fields(self))
+        if actual != expected:
+            raise ValueError(
+                "overhead side-grasp control protocol values cannot change"
+            )
+
+
+ControlProtocol = (
+    FrozenControlProtocol
+    | OverheadDeepGraspControlProtocol
+    | OverheadSideGraspControlProtocol
+)
+
+
+def _validate_control_alignment(
+    *,
+    control: ControlProtocol,
+    perception: "PerceptionEvidence",
+    candidates: Sequence["PlannedPoseCandidate"],
+) -> None:
+    """Tie serialized control offsets to every executable candidate pose."""
+
+    surface_z = float(perception.world_surface_point[2])
+    expected_approach_z = surface_z + control.approach_standoff_m
+    expected_grasp_depth_z = surface_z + control.grasp_depth_standoff_m
+    for index, candidate in enumerate(candidates):
+        approach_z = float(candidate.approach_pose.position[2])
+        grasp_depth_z = float(candidate.grasp_depth_pose.position[2])
+        pregrasp_z = float(candidate.pregrasp_pose.position[2])
+        expected_pregrasp_z = approach_z + control.pregrasp_offset_m
+        values = (
+            ("approach", approach_z, expected_approach_z),
+            ("grasp_depth", grasp_depth_z, expected_grasp_depth_z),
+            ("pregrasp", pregrasp_z, expected_pregrasp_z),
+        )
+        for name, actual, expected in values:
+            if not math.isclose(actual, expected, rel_tol=0.0, abs_tol=1e-9):
+                raise ValueError(
+                    "candidate control alignment mismatch: "
+                    f"candidate {index} {name} z={actual:.12f}, "
+                    f"expected {expected:.12f}"
+                )
 
 
 @dataclass(frozen=True)
@@ -344,6 +427,13 @@ class GeometryExecutionPlan:
             raise ValueError("candidates must be ordered 0 then 180 degrees")
         if sum(row.selected for row in self.candidates) != 1:
             raise ValueError("plan must contain exactly one candidate selected")
+        if not isinstance(self.control, FrozenControlProtocol):
+            raise ValueError("geometry V1 requires frozen control protocol")
+        _validate_control_alignment(
+            control=self.control,
+            perception=self.perception,
+            candidates=self.candidates,
+        )
 
 
 @dataclass(frozen=True)
@@ -363,13 +453,15 @@ class PerceptionExecutionPlan:
     rgb_sha256: str
     camera: CameraEvidence
     perception: PerceptionEvidence
-    control: FrozenControlProtocol
+    control: ControlProtocol
     candidates: tuple[PlannedPoseCandidate, PlannedPoseCandidate]
 
     def __post_init__(self) -> None:
         if self.protocol_version not in (
             PROTOCOL_VERSION,
             PROTOCOL_VERSION_V2,
+            PROTOCOL_VERSION_OVERHEAD,
+            PROTOCOL_VERSION_OVERHEAD_SIDE,
         ):
             raise ValueError("unsupported protocol_version")
         if self.scene_seed != 42:
@@ -406,6 +498,39 @@ class PerceptionExecutionPlan:
             raise ValueError(
                 "V1 protocol only supports geometry backend"
             )
+        if self.protocol_version == PROTOCOL_VERSION_OVERHEAD:
+            if self.backend != "geometry":
+                raise ValueError(
+                    "overhead deep-grasp protocol only supports geometry"
+                )
+            if not isinstance(
+                self.control,
+                OverheadDeepGraspControlProtocol,
+            ):
+                raise ValueError(
+                    "overhead protocol requires overhead deep-grasp control"
+                )
+        elif self.protocol_version == PROTOCOL_VERSION_OVERHEAD_SIDE:
+            if self.backend != "geometry":
+                raise ValueError(
+                    "overhead side-grasp protocol only supports geometry"
+                )
+            if not isinstance(
+                self.control,
+                OverheadSideGraspControlProtocol,
+            ):
+                raise ValueError(
+                    "overhead side-grasp protocol requires side-grasp control"
+                )
+        elif not isinstance(self.control, FrozenControlProtocol):
+            raise ValueError(
+                "standard perception protocols require frozen control"
+            )
+        _validate_control_alignment(
+            control=self.control,
+            perception=self.perception,
+            candidates=self.candidates,
+        )
 
 
 def _expect_fields(
@@ -589,10 +714,20 @@ def load_perception_execution_plan(path: Path) -> PerceptionExecutionPlan:
         raise ValueError("execution plan must be a JSON object")
     _expect_fields(value, PerceptionExecutionPlan, "execution plan")
     protocol = value["protocol_version"]
-    if protocol not in (PROTOCOL_VERSION, PROTOCOL_VERSION_V2):
+    if protocol not in (
+        PROTOCOL_VERSION,
+        PROTOCOL_VERSION_V2,
+        PROTOCOL_VERSION_OVERHEAD,
+        PROTOCOL_VERSION_OVERHEAD_SIDE,
+    ):
         raise ValueError(f"unsupported protocol_version: {protocol}")
     control_value = value["control"]
-    _expect_fields(control_value, FrozenControlProtocol, "control")
+    control_types = {
+        PROTOCOL_VERSION_OVERHEAD: OverheadDeepGraspControlProtocol,
+        PROTOCOL_VERSION_OVERHEAD_SIDE: OverheadSideGraspControlProtocol,
+    }
+    control_type = control_types.get(protocol, FrozenControlProtocol)
+    _expect_fields(control_value, control_type, "control")
     return PerceptionExecutionPlan(
         protocol_version=protocol,
         scene_seed=value["scene_seed"],
@@ -603,6 +738,6 @@ def load_perception_execution_plan(path: Path) -> PerceptionExecutionPlan:
         rgb_sha256=value["rgb_sha256"],
         camera=_camera(value["camera"]),
         perception=_perception_v2(value["perception"]),
-        control=FrozenControlProtocol(**control_value),
+        control=control_type(**control_value),
         candidates=tuple(_candidate(row) for row in value["candidates"]),
     )

@@ -51,8 +51,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-# 基线里定义的 evaluate_prediction 和 Cornell 标准常量。
-from src.baseline_cv.run_cv_baseline import (  # noqa: E402
+# 共享的 Cornell 评价器和标准常量。
+from src.shared.cornell_evaluation import (  # noqa: E402
     ANGLE_THRESHOLD_DEGREES,
     IOU_THRESHOLD,
     evaluate_prediction,
@@ -726,6 +726,13 @@ def evaluate_model(
             "best_iou": evaluation["best_iou"],
             "best_angle_error_degrees": evaluation["best_angle_error_degrees"],
             "matched_gt_index": evaluation["matched_gt_index"],
+            "successful_match_iou": evaluation["successful_match_iou"],
+            "successful_match_angle_error_degrees": evaluation[
+                "successful_match_angle_error_degrees"
+            ],
+            "successful_matched_gt_index": evaluation[
+                "successful_matched_gt_index"
+            ],
             "pred_center_x": prediction_img["center_x"],
             "pred_center_y": prediction_img["center_y"],
             "pred_width": prediction_img["width"],
@@ -973,6 +980,13 @@ def _eval_on_splits(model, dataset, vlm_boxes, device):
             "success": int(evaluation["success"]),
             "best_iou": evaluation["best_iou"],
             "best_angle_error_degrees": evaluation["best_angle_error_degrees"],
+            "successful_match_iou": evaluation["successful_match_iou"],
+            "successful_match_angle_error_degrees": evaluation[
+                "successful_match_angle_error_degrees"
+            ],
+            "successful_matched_gt_index": evaluation[
+                "successful_matched_gt_index"
+            ],
             "pred_center_x": prediction_img["center_x"],
             "pred_center_y": prediction_img["center_y"],
             "pred_width": prediction_img["width"],

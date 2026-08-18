@@ -357,7 +357,7 @@ class TestPerceptionExecutionPlanRoundTrip:
             center_recovery=recovery,
         )
         pose = ToolPose(
-            position=(0.48, 0.0, 0.80),
+            position=(0.48, 0.0, 0.82),
             quaternion_xyzw=(0.0, 0.0, 0.0, 1.0),
         )
         candidate = PlannedPoseCandidate(
@@ -365,11 +365,11 @@ class TestPerceptionExecutionPlanRoundTrip:
             finger_axis_world=(1.0, 0.0, 0.0),
             pregrasp_pose=pose,
             approach_pose=ToolPose(
-                position=(0.48, 0.0, 0.70),
+                position=(0.48, 0.0, 0.72),
                 quaternion_xyzw=(0.0, 0.0, 0.0, 1.0),
             ),
             grasp_depth_pose=ToolPose(
-                position=(0.48, 0.0, 0.685),
+                position=(0.48, 0.0, 0.705),
                 quaternion_xyzw=(0.0, 0.0, 0.0, 1.0),
             ),
             pregrasp_ik=(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
@@ -391,11 +391,11 @@ class TestPerceptionExecutionPlanRoundTrip:
             finger_axis_world=(-1.0, 0.0, 0.0),
             pregrasp_pose=pose,
             approach_pose=ToolPose(
-                position=(0.48, 0.0, 0.70),
+                position=(0.48, 0.0, 0.72),
                 quaternion_xyzw=(0.0, 0.0, 0.0, 1.0),
             ),
             grasp_depth_pose=ToolPose(
-                position=(0.48, 0.0, 0.685),
+                position=(0.48, 0.0, 0.705),
                 quaternion_xyzw=(0.0, 0.0, 0.0, 1.0),
             ),
             pregrasp_ik=(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
@@ -495,7 +495,7 @@ class TestPerceptionExecutionPlanRoundTrip:
             center_recovery=recovery,
         )
         pose = ToolPose(
-            position=(0.478, -0.003, 0.80),
+            position=(0.478, -0.003, 0.82),
             quaternion_xyzw=(0.0, 0.0, 0.0, 1.0),
         )
         candidate = PlannedPoseCandidate(
@@ -503,11 +503,11 @@ class TestPerceptionExecutionPlanRoundTrip:
             finger_axis_world=(1.0, 0.0, 0.0),
             pregrasp_pose=pose,
             approach_pose=ToolPose(
-                position=(0.478, -0.003, 0.70),
+                position=(0.478, -0.003, 0.72),
                 quaternion_xyzw=(0.0, 0.0, 0.0, 1.0),
             ),
             grasp_depth_pose=ToolPose(
-                position=(0.478, -0.003, 0.685),
+                position=(0.478, -0.003, 0.705),
                 quaternion_xyzw=(0.0, 0.0, 0.0, 1.0),
             ),
             pregrasp_ik=(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
@@ -529,11 +529,11 @@ class TestPerceptionExecutionPlanRoundTrip:
             finger_axis_world=(-1.0, 0.0, 0.0),
             pregrasp_pose=pose,
             approach_pose=ToolPose(
-                position=(0.478, -0.003, 0.70),
+                position=(0.478, -0.003, 0.72),
                 quaternion_xyzw=(0.0, 0.0, 0.0, 1.0),
             ),
             grasp_depth_pose=ToolPose(
-                position=(0.478, -0.003, 0.685),
+                position=(0.478, -0.003, 0.705),
                 quaternion_xyzw=(0.0, 0.0, 0.0, 1.0),
             ),
             pregrasp_ik=(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
@@ -613,14 +613,14 @@ class TestPerceptionExecutionPlanRoundTrip:
             # center_recovery absent → None
         )
         pose = ToolPose(
-            position=(0.48, 0.0, 0.80),
+            position=(0.48, 0.0, 0.82),
             quaternion_xyzw=(0.0, 0.0, 0.0, 1.0),
         )
         candidate = PlannedPoseCandidate(
             symmetry_degrees=0.0, finger_axis_world=(1.0, 0.0, 0.0),
             pregrasp_pose=pose,
-            approach_pose=ToolPose(position=(0.48, 0.0, 0.70), quaternion_xyzw=(0.0, 0.0, 0.0, 1.0)),
-            grasp_depth_pose=ToolPose(position=(0.48, 0.0, 0.685), quaternion_xyzw=(0.0, 0.0, 0.0, 1.0)),
+            approach_pose=ToolPose(position=(0.48, 0.0, 0.72), quaternion_xyzw=(0.0, 0.0, 0.0, 1.0)),
+            grasp_depth_pose=ToolPose(position=(0.48, 0.0, 0.705), quaternion_xyzw=(0.0, 0.0, 0.0, 1.0)),
             pregrasp_ik=(0.0,)*7, approach_ik=(0.0,)*7, grasp_depth_ik=(0.0,)*7,
             ik_fk_passed=True, clearance_passed=True, checked_state_count=82,
             minimum_clearance_m=0.005, environment_collision_count=0,
@@ -630,8 +630,8 @@ class TestPerceptionExecutionPlanRoundTrip:
         alt = PlannedPoseCandidate(
             symmetry_degrees=180.0, finger_axis_world=(-1.0, 0.0, 0.0),
             pregrasp_pose=pose,
-            approach_pose=ToolPose(position=(0.48, 0.0, 0.70), quaternion_xyzw=(0.0, 0.0, 0.0, 1.0)),
-            grasp_depth_pose=ToolPose(position=(0.48, 0.0, 0.685), quaternion_xyzw=(0.0, 0.0, 0.0, 1.0)),
+            approach_pose=ToolPose(position=(0.48, 0.0, 0.72), quaternion_xyzw=(0.0, 0.0, 0.0, 1.0)),
+            grasp_depth_pose=ToolPose(position=(0.48, 0.0, 0.705), quaternion_xyzw=(0.0, 0.0, 0.0, 1.0)),
             pregrasp_ik=(0.0,)*7, approach_ik=(0.0,)*7, grasp_depth_ik=(0.0,)*7,
             ik_fk_passed=True, clearance_passed=True, checked_state_count=82,
             minimum_clearance_m=0.005, environment_collision_count=0,

@@ -49,13 +49,15 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.baseline_cv.run_cv_baseline import (  # noqa: E402
-    ANGLE_THRESHOLD_DEGREES,
-    IOU_THRESHOLD,
     create_object_mask,
-    evaluate_prediction,
     predict_grasp_from_contour,
 )
 from src.shared.cornell_dataset import CornellGraspDataset  # noqa: E402
+from src.shared.cornell_evaluation import (  # noqa: E402
+    ANGLE_THRESHOLD_DEGREES,
+    IOU_THRESHOLD,
+    evaluate_prediction,
+)
 from src.shared.grasp_geometry import rectangles_to_center_format  # noqa: E402
 
 
@@ -646,6 +648,13 @@ def main() -> None:
             "best_iou": evaluation["best_iou"],
             "best_angle_error_degrees": evaluation["best_angle_error_degrees"],
             "matched_gt_index": evaluation["matched_gt_index"],
+            "successful_match_iou": evaluation["successful_match_iou"],
+            "successful_match_angle_error_degrees": evaluation[
+                "successful_match_angle_error_degrees"
+            ],
+            "successful_matched_gt_index": evaluation[
+                "successful_matched_gt_index"
+            ],
             "vlm_detected": int(vlm_box is not None),
             "vlm_box_x1": "" if vlm_box is None else vlm_box[0],
             "vlm_box_y1": "" if vlm_box is None else vlm_box[1],
@@ -733,6 +742,9 @@ def main() -> None:
         "best_iou",
         "best_angle_error_degrees",
         "matched_gt_index",
+        "successful_match_iou",
+        "successful_match_angle_error_degrees",
+        "successful_matched_gt_index",
         # VLM 定位结果。
         "vlm_detected",
         "vlm_box_x1",

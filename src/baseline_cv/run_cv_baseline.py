@@ -31,6 +31,13 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.shared.cornell_dataset import CornellGraspDataset
+from src.shared.cornell_evaluation import (
+    ANGLE_THRESHOLD_DEGREES,
+    IOU_THRESHOLD,
+    angle_difference_degrees,
+    evaluate_prediction,
+    rotated_rect_iou,
+)
 from src.shared.grasp_geometry import rectangles_to_center_format, normalize_angle_radians
 
 
@@ -39,10 +46,6 @@ OUTPUT_DIR = Path("data/processed/baseline_cv")
 PREDICTIONS_CSV = OUTPUT_DIR / "cv_baseline_predictions.csv"
 SUMMARY_JSON = OUTPUT_DIR / "cv_baseline_summary.json"
 VISUALIZATION_DIR = OUTPUT_DIR / "visualizations"
-
-
-IOU_THRESHOLD = 0.25
-ANGLE_THRESHOLD_DEGREES = 30.0
 
 
 def create_object_mask(rgb_bgr: np.ndarray) -> np.ndarray:
@@ -195,111 +198,6 @@ def predict_grasp_from_contour(contour: np.ndarray) -> dict:
     }
 
 
-def rotated_rect_iou(rect_a: dict, rect_b: dict) -> float:
-    """
-    计算两个旋转矩形的 IoU。
-
-    IoU = intersection area / union area
-
-    OpenCV 的 rotatedRectangleIntersection 可以计算两个旋转矩形的交集多边形。
-    """
-
-    cv_rect_a = (
-        (float(rect_a["center_x"]), float(rect_a["center_y"])),
-        (float(rect_a["width"]), float(rect_a["height"])),
-        float(rect_a["angle_degrees"]),
-    )
-    cv_rect_b = (
-        (float(rect_b["center_x"]), float(rect_b["center_y"])),
-        (float(rect_b["width"]), float(rect_b["height"])),
-        float(rect_b["angle_degrees"]),
-    )
-
-    area_a = float(rect_a["width"]) * float(rect_a["height"])
-    area_b = float(rect_b["width"]) * float(rect_b["height"])
-
-    intersection_type, intersection_points = cv2.rotatedRectangleIntersection(
-        cv_rect_a,
-        cv_rect_b,
-    )
-
-    if intersection_type == cv2.INTERSECT_NONE or intersection_points is None:
-        intersection_area = 0.0
-    else:
-        intersection_area = float(cv2.contourArea(intersection_points))
-
-    union_area = area_a + area_b - intersection_area
-    if union_area <= 0:
-        return 0.0
-
-    return intersection_area / union_area
-
-
-def angle_difference_degrees(angle_a: float, angle_b: float) -> float:
-    """
-    计算两个抓取角度之间的最小差异，单位是度。
-
-    对平行夹爪来说，相差 180 度通常等价。
-    所以这里用 normalize_angle_radians 处理。
-    """
-
-    diff_radians = normalize_angle_radians(math.radians(angle_a - angle_b))
-    return abs(math.degrees(diff_radians))
-
-
-def evaluate_prediction(prediction: dict | None, positive_ground_truths: list[dict]) -> dict:
-    """
-    用 Cornell-style 标准评估一个预测框。
-
-    常见成功标准：
-    - 与任意一个 ground-truth 正抓取框 IoU >= 0.25；
-    - 角度误差 <= 30 度。
-    """
-
-    if prediction is None:
-        return {
-            "success": False,
-            "best_iou": 0.0,
-            "best_angle_error_degrees": 180.0,
-            "matched_gt_index": -1,
-        }
-
-    best = {
-        "success": False,
-        "best_iou": 0.0,
-        "best_angle_error_degrees": 180.0,
-        "matched_gt_index": -1,
-    }
-
-    for gt_index, gt in enumerate(positive_ground_truths):
-        iou = rotated_rect_iou(prediction, gt)
-        angle_error = angle_difference_degrees(
-            prediction["angle_degrees"],
-            gt["angle_degrees"],
-        )
-
-        # 先按 IoU 选最佳匹配；IoU 相同时角度误差小的更好。
-        is_better = (
-            iou > best["best_iou"]
-            or (
-                math.isclose(iou, best["best_iou"])
-                and angle_error < best["best_angle_error_degrees"]
-            )
-        )
-
-        if is_better:
-            best["best_iou"] = float(iou)
-            best["best_angle_error_degrees"] = float(angle_error)
-            best["matched_gt_index"] = gt_index
-
-    best["success"] = (
-        best["best_iou"] >= IOU_THRESHOLD
-        and best["best_angle_error_degrees"] <= ANGLE_THRESHOLD_DEGREES
-    )
-
-    return best
-
-
 def draw_prediction_visualization(
     image: np.ndarray,
     prediction: dict | None,
@@ -428,6 +326,13 @@ def main() -> None:
             "best_iou": evaluation["best_iou"],
             "best_angle_error_degrees": evaluation["best_angle_error_degrees"],
             "matched_gt_index": evaluation["matched_gt_index"],
+            "successful_match_iou": evaluation["successful_match_iou"],
+            "successful_match_angle_error_degrees": evaluation[
+                "successful_match_angle_error_degrees"
+            ],
+            "successful_matched_gt_index": evaluation[
+                "successful_matched_gt_index"
+            ],
             "failed_to_predict": int(prediction is None),
             "rgb_path": sample["rgb_path"],
         }
@@ -490,6 +395,9 @@ def main() -> None:
         "best_iou",
         "best_angle_error_degrees",
         "matched_gt_index",
+        "successful_match_iou",
+        "successful_match_angle_error_degrees",
+        "successful_matched_gt_index",
         "failed_to_predict",
         "pred_center_x",
         "pred_center_y",
